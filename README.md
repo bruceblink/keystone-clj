@@ -27,7 +27,7 @@ Expected output:
 {"code":0,"msg":"操作成功","data":"is alive"}
 ~~~
 
-By default, database and Redis are disabled. Protected routes deliberately return 401 until production-grade RS256 JWT validation, session revocation, and RBAC are implemented. A test-only authenticator is injected into unit tests; no production bypass exists.
+By default, database and Redis are disabled. Login and protected routes remain unavailable until MySQL, Redis and `KEYSTONE_RSA_PRIVATE_KEY` are configured. There is no production authentication bypass.
 
 ## Docker
 
@@ -45,6 +45,15 @@ Compose initializes clients but DOES NOT migrate the database automatically. Fir
 | Method | Path | Status |
 | --- | --- | --- |
 | GET | /health | Implemented with unit tests |
+| GET | /getConfig | Captcha flag and dictionary configuration |
+| GET | /captchaImage | Configurable one-time SVG captcha |
+| GET | /login/rsa-public-key | Configured RSA public key |
+| POST | /login | RSA password + BCrypt login, requires DB and Redis |
+| POST | /refresh-token | Rotating refresh session |
+| POST | /logout-refresh-token | Refresh session revocation |
+| POST | /logout | Authenticated access-token logout |
+| GET | /getLoginUserInfo | Authenticated user and permissions |
+| GET | /getRouters | Authenticated database-backed menu tree |
 | GET | /system/dict/types | Read-only, requires DB and authentication |
 | GET | /system/dict/type/list | Alias of dictionary type list |
 | GET | /system/dict/type/:dictId | Read-only dictionary type details |
@@ -64,6 +73,12 @@ Dictionary database integration has NOT been tested yet. Unimplemented routes ar
 | APP_REDIS_ENABLED | false | Start Jedis pool |
 | REDIS_HOST / REDIS_PORT / REDIS_PASSWORD | localhost / 6379 / empty | Redis connection |
 | APP_MIGRATE | false | Explicit Flyway migration |
+| KEYSTONE_RSA_PRIVATE_KEY | empty | Base64 PKCS#8 RSA private key; required for login |
+| KEYSTONE_RSA_PUBLIC_KEY | empty | Optional Base64 X.509 RSA public key |
+| JWT_ISSUER | keystone | JWT issuer claim |
+| TOKEN_EXPIRATION_SECONDS | 1800 | Access-token lifetime |
+| TOKEN_REFRESH_EXPIRATION_SECONDS | 604800 | Refresh-session lifetime |
+| APP_CAPTCHA_ENABLED | false | Enable one-time captcha validation |
 | CACHE_TTL_MINUTES | 5 | Caffeine TTL |
 
 ## Tests, REPL and build

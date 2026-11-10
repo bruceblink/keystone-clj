@@ -10,9 +10,11 @@
 - [x] Verify dependencies, build, tests and Docker startup in a networked runtime
 - [x] Snapshot all upstream API routes, fixtures and migration checksums
 - [x] RSA public key/password decryption and bcrypt login service
+- [x] Captcha, login and refresh HTTP flow
 - [x] RS256 JWT signature, issuer and expiry verification with session hook
 - [x] Redis refresh sessions, rotation, revocation and force-login service
-- [ ] RBAC, menu permissions and departmental data-scope filtering
+- [x] JWT RBAC permissions and database-backed dynamic router lookup
+- [ ] Departmental data-scope filtering
 - [ ] User, role, menu, dept, post and dictionary CRUD
 - [ ] Exact error and timestamp compatibility
 

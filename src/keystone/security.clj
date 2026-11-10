@@ -67,7 +67,9 @@
                        (str "请求接口：" (:uri request) " 失败，用户未授权"))
 
         (and required-permission
-             (not (contains? (set (:permissions principal)) required-permission)))
+             (let [permissions (set (:permissions principal))]
+               (not (or (contains? permissions required-permission)
+                        (contains? permissions "*")))))
         (response/fail 403 10202 "没有权限进行此操作，请联系管理员")
 
         :else

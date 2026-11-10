@@ -32,5 +32,11 @@
            :host (env "REDIS_HOST" "localhost")
            :port (env-long "REDIS_PORT" 6379)
            :password (env "REDIS_PASSWORD" "")}
+   :auth {:issuer (env "JWT_ISSUER" "keystone")
+          :private-key (env "KEYSTONE_RSA_PRIVATE_KEY" "")
+          :public-key (env "KEYSTONE_RSA_PUBLIC_KEY" "")
+          :access-ttl-seconds (env-long "TOKEN_EXPIRATION_SECONDS" 1800)
+          :refresh-ttl-seconds (env-long "TOKEN_REFRESH_EXPIRATION_SECONDS" 604800)
+          :captcha-enabled? (enabled? "APP_CAPTCHA_ENABLED")}
    :cache {:maximum-size (env-long "CACHE_MAXIMUM_SIZE" 10000)
            :ttl-minutes (env-long "CACHE_TTL_MINUTES" 5)}})

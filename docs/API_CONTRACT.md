@@ -24,14 +24,23 @@ Paginated data:
 - GET /system/dict/type/list
 - GET /system/dict/type/{dictId}
 - GET /system/dict/data/type/{dictType}
+- GET /getConfig
+- GET /captchaImage
+- GET /login/rsa-public-key
+- POST /login
+- POST /refresh-token
+- POST /logout-refresh-token
+- POST /logout
+- GET /getLoginUserInfo
+- GET /getRouters
 
-Only the health contract is unit-tested against known expected values.
+The login, refresh and current-user flows have unit tests with generated RSA keys and an in-memory session store. Production login requires the configured database, Redis and RSA private key.
 The dictionary endpoints use SQL that targets original table/column names, but require integration and parity tests.
 
 ## Not implemented
 
-- POST /login, /refresh-token, /logout-refresh-token
-- GET /captchaImage, /getConfig, /getLoginUserInfo, /getRouters
+- User, role, menu, dept, post and dictionary CRUD
+- Config, notice, profile, logs, files, jobs and monitoring
 - User/role/menu/dept/post CRUD
 - Dictionary create/update/delete, config, notice, log, files, jobs and monitoring
 
