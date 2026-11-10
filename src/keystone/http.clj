@@ -62,7 +62,8 @@
                  ["/system/dict/type/:dictId"
                   {:get (authorize dict-one "system:dict:query")}]
                  ["/system/dict/data/type/:dictType"
-                  {:get (authorize dict-data nil)}]])
+                  {:get (authorize dict-data nil)}]]
+                {:conflicts nil})
         default (ring/create-default-handler
                  {:not-found (fn [_] (response/fail 404 10001 "请求资源不存在"))
                   :method-not-allowed (fn [_] (response/fail 405 10002 "不支持的操作"))
