@@ -1,0 +1,2 @@
+-- Baseline marker migration for Flyway onboarding.
+-- Keep this file intentionally lightweight for first rollout.

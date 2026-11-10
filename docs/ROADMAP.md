@@ -7,8 +7,8 @@
 - [x] Fail-closed authentication boundary and isolated unit tests
 - [x] Flyway migration import helper, no automatic schema mutation
 - [x] Docker/Compose, CI, uberjar build configuration
-- [ ] Verify dependencies, build, tests and Docker startup in a networked runtime
-- [ ] Snapshot all upstream API routes, fixtures and migration checksums
+- [x] Verify dependencies, build, tests and Docker startup in a networked runtime
+- [x] Snapshot all upstream API routes, fixtures and migration checksums
 - [ ] RSA public key/password decryption, captcha, bcrypt login
 - [x] RS256 JWT signature, issuer and expiry verification with session hook
 - [ ] Redis refresh sessions, revocation and force-login
