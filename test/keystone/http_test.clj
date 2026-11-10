@@ -88,7 +88,11 @@
      :get-notice (fn [id] (when (= 1 id) {:noticeId 1 :noticeTitle "公告"}))
      :add-notice! (fn [_ _] nil)
      :update-notice! (fn [_] nil)
-     :delete-notices! (fn [_] nil)}
+     :delete-notices! (fn [_] nil)
+     :list-login-logs (fn [_] {:total 1 :rows [{:logId 1 :username "admin"}]})
+     :delete-login-logs! (fn [_] nil)
+     :list-operation-logs (fn [_] {:total 1 :rows [{:operationId 1 :username "admin"}]})
+     :delete-operation-logs! (fn [_] nil)}
     :user-repository
     {:list-users (fn [_] {:total 1 :rows [{:userId 42 :username "admin"}]})
      :get-user-detail (fn [id] (when (= 42 id) {:userId 42 :username "admin"}))
@@ -212,7 +216,10 @@
         update-profile (invoke handler :put "/system/user/profile" "test-token"
                                {"nickName" "新名称"})
         update-password (invoke handler :put "/system/user/profile/password" "test-token"
-                                 {"oldPassword" "old" "newPassword" "new"})]
+                                 {"oldPassword" "old" "newPassword" "new"})
+        login-logs (invoke handler "/logs/loginLogs" "test-token")
+        operation-logs (invoke handler "/logs/operationLogs" "test-token")
+        delete-login-log (invoke handler :delete "/logs/loginLogs" "test-token" nil)]
     (is (= 1 (get-in users [:json "data" "total"])))
     (is (= "admin" (get-in user [:json "data" "username"])))
     (is (= "admin" (get-in role [:json "data" "roleKey"])))
@@ -231,4 +238,7 @@
     (is (= 0 (get-in add-notice [:json "code"])))
     (is (= "管理员" (get-in profile [:json "data" "roleName"])))
     (is (= 0 (get-in update-profile [:json "code"])))
-    (is (= 0 (get-in update-password [:json "code"])))) )
+    (is (= 0 (get-in update-password [:json "code"])))
+    (is (= 1 (get-in login-logs [:json "data" "total"])))
+    (is (= 1 (get-in operation-logs [:json "data" "total"])))
+    (is (= 0 (get-in delete-login-log [:json "code"])))) )

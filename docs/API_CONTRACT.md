@@ -48,6 +48,7 @@ The dictionary endpoints use SQL that targets original table/column names, but r
 - Dictionary type/data write APIs and cache invalidation
 - Config and notice list/detail/create/update/delete APIs
 - Profile read/update/password APIs
+- Login and operation log query/delete APIs
 - Config, notice, profile, logs, files, jobs and monitoring
 - User/role/menu/dept/post CRUD
 - Dictionary create/update/delete, config, notice, log, files, jobs and monitoring

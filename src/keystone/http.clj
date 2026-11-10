@@ -314,6 +314,16 @@
                                       "system:notice:add")
         update-notice-handler (authorize (fn [request] (path-id-body-write admin-repo :update-notice! request :id)) "system:notice:edit")
         delete-notice-handler (authorize (fn [request] (query-ids-write admin-repo :delete-notices! request "noticeIds")) "system:notice:remove")
+        login-log-list-handler (with-repository-function admin-repo :list-login-logs
+                                 (partial management-list admin-repo :list-login-logs))
+        delete-login-log-handler (authorize (fn [request]
+                                              (query-ids-write admin-repo :delete-login-logs! request "ids"))
+                                            "monitor:logininfor:remove")
+        operation-log-list-handler (with-repository-function admin-repo :list-operation-logs
+                                     (partial management-list admin-repo :list-operation-logs))
+        delete-operation-log-handler (authorize (fn [request]
+                                                  (query-ids-write admin-repo :delete-operation-logs! request "operationIds"))
+                                                "monitor:operlog:remove")
         dict-data-list-handler (with-repository-function repo :list-data
                                  (partial management-list repo :list-data))
         dict-data-detail-handler (with-repository-function repo :get-data
@@ -406,6 +416,12 @@
                  ["/system/notices/:id"
                   {:get (authorize notice-detail-handler "system:notice:query")
                    :put update-notice-handler}]
+                 ["/logs/loginLogs"
+                  {:get (authorize login-log-list-handler "monitor:logininfor:list")
+                   :delete delete-login-log-handler}]
+                 ["/logs/operationLogs"
+                  {:get (authorize operation-log-list-handler "monitor:operlog:list")
+                   :delete delete-operation-log-handler}]
                  ["/system/dict/types"
                   {:get (authorize dict-list "system:dict:list")}]
                  ["/system/dict/type/list"

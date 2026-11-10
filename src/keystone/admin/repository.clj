@@ -155,6 +155,85 @@
                    (str/join "," (repeat (count ids) "?")) ")") ids))
   nil)
 
+(defn- login-log->dto [row]
+  {:logId (:info_id row) :username (:username row) :ipAddress (:ip_address row)
+   :loginLocation (:login_location row) :browser (:browser row)
+   :operationSystem (:operation_system row) :status (:status row)
+   :statusStr (if (= 1 (long (or (:status row) 0))) "成功" "失败")
+   :msg (:msg row) :loginTime (some-> (:login_time row) str)})
+
+(defn list-login-logs [datasource params]
+  (let [[page size] (page params)
+        conditions (cond-> ["deleted = 0"]
+                     (not (str/blank? (get params "username"))) (conj "username LIKE ?")
+                     (not (str/blank? (get params "ipAddress"))) (conj "ip_address LIKE ?")
+                     (some? (get params "status")) (conj "status = ?"))
+        values (cond-> []
+                 (not (str/blank? (get params "username"))) (conj (str "%" (get params "username") "%"))
+                 (not (str/blank? (get params "ipAddress"))) (conj (str "%" (get params "ipAddress") "%"))
+                 (some? (get params "status")) (conj (get params "status")))
+        where (str/join " AND " conditions)
+        total (:total (first-row datasource (str "SELECT COUNT(*) AS total FROM sys_login_info WHERE " where) values))
+        rows (query datasource
+                     (str "SELECT info_id, username, ip_address, login_location, browser,
+                                  operation_system, status, msg, login_time
+                             FROM sys_login_info WHERE " where
+                          " ORDER BY info_id DESC LIMIT ? OFFSET ?")
+                     (into values [size (* (dec page) size)]))]
+    {:total (or total 0) :rows (mapv login-log->dto rows)}))
+
+(defn delete-login-logs! [datasource ids]
+  (let [ids (->> (str/split (str (or ids "")) #",") (remove str/blank?)
+                 (map #(Long/parseLong %)) distinct vec)]
+    (when (empty? ids) (throw (ex-info "ids is required" {:type :validation})))
+    (execute! datasource
+              (str "UPDATE sys_login_info SET deleted = 1 WHERE info_id IN ("
+                   (str/join "," (repeat (count ids) "?")) ")") ids))
+  nil)
+
+(defn- operation-log->dto [row]
+  {:operationId (:operation_id row) :businessType (:business_type row)
+   :businessTypeStr (str (:business_type row)) :requestMethod (:request_method row)
+   :requestModule (:request_module row) :requestUrl (:request_url row)
+   :calledMethod (:called_method row) :operatorType (:operator_type row)
+   :operatorTypeStr (str (:operator_type row)) :userId (:user_id row)
+   :username (:username row) :operatorIp (:operator_ip row) :deptId (:dept_id row)
+   :deptName (:dept_name row) :operationParam (:operation_param row)
+   :operationResult (:operation_result row) :status (:status row)
+   :statusStr (if (= 1 (long (or (:status row) 0))) "正常" "异常")
+   :errorStack (:error_stack row) :operationTime (some-> (:operation_time row) str)})
+
+(defn list-operation-logs [datasource params]
+  (let [[page size] (page params)
+        conditions (cond-> ["deleted = 0"]
+                     (not (str/blank? (get params "requestModule"))) (conj "request_module LIKE ?")
+                     (not (str/blank? (get params "username"))) (conj "username LIKE ?")
+                     (some? (get params "status")) (conj "status = ?"))
+        values (cond-> []
+                 (not (str/blank? (get params "requestModule"))) (conj (str "%" (get params "requestModule") "%"))
+                 (not (str/blank? (get params "username"))) (conj (str "%" (get params "username") "%"))
+                 (some? (get params "status")) (conj (get params "status")))
+        where (str/join " AND " conditions)
+        total (:total (first-row datasource (str "SELECT COUNT(*) AS total FROM sys_operation_log WHERE " where) values))
+        rows (query datasource
+                     (str "SELECT operation_id, business_type, request_method, request_module,
+                                  request_url, called_method, operator_type, user_id, username,
+                                  operator_ip, dept_id, dept_name, operation_param, operation_result,
+                                  status, error_stack, operation_time
+                             FROM sys_operation_log WHERE " where
+                          " ORDER BY operation_id DESC LIMIT ? OFFSET ?")
+                     (into values [size (* (dec page) size)]))]
+    {:total (or total 0) :rows (mapv operation-log->dto rows)}))
+
+(defn delete-operation-logs! [datasource ids]
+  (let [ids (->> (str/split (str (or ids "")) #",") (remove str/blank?)
+                 (map #(Long/parseLong %)) distinct vec)]
+    (when (empty? ids) (throw (ex-info "operationIds is required" {:type :validation})))
+    (execute! datasource
+              (str "UPDATE sys_operation_log SET deleted = 1 WHERE operation_id IN ("
+                   (str/join "," (repeat (count ids) "?")) ")") ids))
+  nil)
+
 (defn make-repository [datasource]
   {:list-configs #(list-configs datasource %)
    :get-config #(get-config datasource %)
@@ -165,4 +244,8 @@
    :get-notice #(get-notice datasource %)
    :add-notice! (fn [body creator-id] (add-notice! datasource body creator-id))
    :update-notice! (fn [[id body]] (update-notice! datasource id body))
-   :delete-notices! #(delete-notices! datasource %)})
+   :delete-notices! #(delete-notices! datasource %)
+   :list-login-logs #(list-login-logs datasource %)
+   :delete-login-logs! #(delete-login-logs! datasource %)
+   :list-operation-logs #(list-operation-logs datasource %)
+   :delete-operation-logs! #(delete-operation-logs! datasource %)})
