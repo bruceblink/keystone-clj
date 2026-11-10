@@ -88,6 +88,8 @@ department/current subtree/self modes.
 Avatar and general file upload/download endpoints use a confined local upload
 directory (`FILE_UPLOAD_DIR`, default `/tmp/keystone-upload`) with extension,
 path and 10 MB size checks.
+Public configuration, captcha, RSA key and login endpoints have window rate
+limits; excess requests receive HTTP 429.
 | GET | /system/dict/types | Read-only, requires DB and authentication |
 | GET | /system/dict/type/list | Alias of dictionary type list |
 | GET | /system/dict/type/:dictId | Read-only dictionary type details |

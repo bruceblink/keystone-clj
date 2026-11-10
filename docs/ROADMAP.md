@@ -33,7 +33,8 @@
 ## P2: operations
 - [x] Cron job definitions and execution-log query APIs
 - [ ] Cron scheduler execution, failure/retry/concurrency policies
-- [ ] Rate limits, idempotency, metrics and audit
+- [x] Window rate limits for public authentication endpoints
+- [ ] Idempotency, metrics and complete audit instrumentation
 - [ ] Performance and deployment benchmarks versus Java Keystone
 
 Exit condition: each feature passes API-contract, auth, persistence and failure tests. Internal architecture may differ.

@@ -53,6 +53,7 @@ The dictionary endpoints use SQL that targets original table/column names, but r
 - Job definition and execution-log query APIs
 - Role data-scope enforcement on user list queries
 - Avatar and general file upload/download APIs
+- Rate-limited public authentication endpoints
 - Config, notice, profile, logs, files, jobs and monitoring
 - User/role/menu/dept/post CRUD
 - Dictionary create/update/delete, config, notice, log, files, jobs and monitoring

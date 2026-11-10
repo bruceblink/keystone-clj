@@ -7,6 +7,7 @@
             [keystone.dict.repository :as repository]
             [keystone.dict.schema :as schema]
             [keystone.files :as files]
+            [keystone.rate-limit :as rate]
             [keystone.response :as response]
             [keystone.security :as security]
             [keystone.user.repository :as users]
@@ -313,15 +314,18 @@
                        (when-let [datasource (:datasource db)]
                          (admin/make-repository datasource)))
         effective-authenticator (or authenticator (:authenticate (:service auth)))
+        limiter (rate/make-limiter)
+        client-key (fn [request] (or (:remote-addr request) "global"))
+        global-key (fn [_] "global")
         authorize (fn [handler permission]
                     (security/wrap-protected handler effective-authenticator permission))
         dict-list (with-repository repo (partial list-types repo))
         dict-one (with-repository repo (partial get-type repo))
         dict-data (with-repository repo (partial list-data-by-type repo))
-        config-handler (fn [_] (get-config repo auth))
-        captcha-handler (fn [_] (captcha-response auth))
-        rsa-handler (fn [_] (rsa-public-key auth))
-        login-handler (fn [request] (login auth request))
+        config-handler (rate/wrap (fn [_] (get-config repo auth)) limiter 10000 5 global-key)
+        captcha-handler (rate/wrap (fn [_] (captcha-response auth)) limiter 10000 10 client-key)
+        rsa-handler (rate/wrap (fn [_] (rsa-public-key auth)) limiter 60000 60 client-key)
+        login-handler (rate/wrap (fn [request] (login auth request)) limiter 60000 10 client-key)
         refresh-handler (fn [request] (refresh-token auth request))
         logout-refresh-handler (fn [request] (logout-refresh-token auth request))
         logout-handler (authorize
