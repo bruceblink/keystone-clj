@@ -234,6 +234,102 @@
                    (str/join "," (repeat (count ids) "?")) ")") ids))
   nil)
 
+(defn- job->dto [row]
+  {:jobId (:job_id row) :jobName (:job_name row) :jobGroup (:job_group row)
+   :invokeTarget (:invoke_target row) :jobParams (:job_params row)
+   :cronExpression (:cron_expression row) :concurrent (:concurrent row)
+   :concurrentStr (if (= 1 (long (or (:concurrent row) 0))) "允许" "禁止")
+   :status (:status row) :statusStr (if (= 1 (long (or (:status row) 0))) "正常" "暂停")
+   :remark (:remark row) :createTime (some-> (:create_time row) str)})
+
+(defn list-jobs [datasource params]
+  (let [[page size] (page params)
+        conditions (cond-> ["deleted = 0"]
+                     (not (str/blank? (get params "jobName"))) (conj "job_name LIKE ?")
+                     (not (str/blank? (get params "jobGroup"))) (conj "job_group LIKE ?")
+                     (some? (get params "status")) (conj "status = ?"))
+        values (cond-> []
+                 (not (str/blank? (get params "jobName"))) (conj (str "%" (get params "jobName") "%"))
+                 (not (str/blank? (get params "jobGroup"))) (conj (str "%" (get params "jobGroup") "%"))
+                 (some? (get params "status")) (conj (get params "status")))
+        where (str/join " AND " conditions)
+        total (:total (first-row datasource (str "SELECT COUNT(*) AS total FROM sys_job WHERE " where) values))
+        rows (query datasource
+                     (str "SELECT job_id, job_name, job_group, invoke_target, job_params,
+                                  cron_expression, concurrent, status, remark, create_time
+                             FROM sys_job WHERE " where
+                          " ORDER BY job_id DESC LIMIT ? OFFSET ?")
+                     (into values [size (* (dec page) size)]))]
+    {:total (or total 0) :rows (mapv job->dto rows)}))
+
+(defn get-job [datasource id]
+  (some-> (first-row datasource
+                     "SELECT job_id, job_name, job_group, invoke_target, job_params,
+                             cron_expression, concurrent, status, remark, create_time
+                        FROM sys_job WHERE job_id = ? AND deleted = 0"
+                     [id]) job->dto))
+
+(defn add-job! [datasource body]
+  (execute! datasource
+            "INSERT INTO sys_job
+             (job_name, job_group, invoke_target, job_params, cron_expression, concurrent,
+              status, remark, create_time, deleted)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, NOW(), 0)"
+            [(required body "jobName") (required body "jobGroup") (required body "invokeTarget")
+             (or (value body "jobParams") "") (required body "cronExpression")
+             (or (value body "concurrent") 0) (or (value body "status") 0)
+             (or (value body "remark") "")])
+  nil)
+
+(defn update-job! [datasource id body]
+  (execute! datasource
+            "UPDATE sys_job SET job_name = ?, job_group = ?, invoke_target = ?, job_params = ?,
+                    cron_expression = ?, concurrent = ?, status = ?, remark = ?, update_time = NOW()
+               WHERE job_id = ? AND deleted = 0"
+            [(required body "jobName") (required body "jobGroup") (required body "invokeTarget")
+             (or (value body "jobParams") "") (required body "cronExpression")
+             (or (value body "concurrent") 0) (or (value body "status") 0)
+             (or (value body "remark") "") id])
+  nil)
+
+(defn update-job-status! [datasource id body]
+  (execute! datasource "UPDATE sys_job SET status = ?, update_time = NOW() WHERE job_id = ? AND deleted = 0"
+            [(or (value body "status") 0) id])
+  nil)
+
+(defn delete-jobs! [datasource ids]
+  (let [ids (->> (str/split (str (or ids "")) #",") (remove str/blank?)
+                 (map #(Long/parseLong %)) distinct vec)]
+    (when (empty? ids) (throw (ex-info "jobIds is required" {:type :validation})))
+    (execute! datasource
+              (str "UPDATE sys_job SET deleted = 1, update_time = NOW() WHERE job_id IN ("
+                   (str/join "," (repeat (count ids) "?")) ")") ids))
+  nil)
+
+(defn list-job-logs [datasource params]
+  (let [[page size] (page params)
+        conditions ["1 = 1"]
+        values []
+        where (str/join " AND " conditions)
+        total (:total (first-row datasource (str "SELECT COUNT(*) AS total FROM sys_job_log WHERE " where) values))
+        rows (query datasource
+                     (str "SELECT job_log_id, job_id, job_name, job_group, invoke_target, job_params,
+                                  cron_expression, trigger_type, status, job_message, exception_info,
+                                  start_time, end_time, duration_ms, create_time
+                             FROM sys_job_log WHERE " where
+                          " ORDER BY job_log_id DESC LIMIT ? OFFSET ?")
+                     (into values [size (* (dec page) size)]))]
+    {:total (or total 0)
+     :rows (mapv (fn [row]
+                   {:jobLogId (:job_log_id row) :jobId (:job_id row)
+                    :jobName (:job_name row) :jobGroup (:job_group row)
+                    :invokeTarget (:invoke_target row) :jobParams (:job_params row)
+                    :cronExpression (:cron_expression row) :triggerType (:trigger_type row)
+                    :status (:status row) :jobMessage (:job_message row)
+                    :exceptionInfo (:exception_info row) :startTime (some-> (:start_time row) str)
+                    :endTime (some-> (:end_time row) str) :durationMs (:duration_ms row)
+                    :createTime (some-> (:create_time row) str)}) rows)}))
+
 (defn make-repository [datasource]
   {:list-configs #(list-configs datasource %)
    :get-config #(get-config datasource %)
@@ -248,4 +344,11 @@
    :list-login-logs #(list-login-logs datasource %)
    :delete-login-logs! #(delete-login-logs! datasource %)
    :list-operation-logs #(list-operation-logs datasource %)
-   :delete-operation-logs! #(delete-operation-logs! datasource %)})
+   :delete-operation-logs! #(delete-operation-logs! datasource %)
+   :list-jobs #(list-jobs datasource %)
+   :get-job #(get-job datasource %)
+   :add-job! #(add-job! datasource %)
+   :update-job! (fn [[id body]] (update-job! datasource id body))
+   :update-job-status! (fn [[id body]] (update-job-status! datasource id body))
+   :delete-jobs! #(delete-jobs! datasource %)
+   :list-job-logs #(list-job-logs datasource %)})

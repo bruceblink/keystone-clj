@@ -95,7 +95,14 @@
      :list-login-logs (fn [_] {:total 1 :rows [{:logId 1 :username "admin"}]})
      :delete-login-logs! (fn [_] nil)
      :list-operation-logs (fn [_] {:total 1 :rows [{:operationId 1 :username "admin"}]})
-     :delete-operation-logs! (fn [_] nil)}
+     :delete-operation-logs! (fn [_] nil)
+     :list-jobs (fn [_] {:total 1 :rows [{:jobId 1 :jobName "demo"}]})
+     :get-job (fn [id] (when (= 1 id) {:jobId 1 :jobName "demo"}))
+     :list-job-logs (fn [_] {:total 1 :rows [{:jobLogId 1 :jobName "demo"}]})
+     :add-job! (fn [_] nil)
+     :update-job! (fn [_] nil)
+     :update-job-status! (fn [_] nil)
+     :delete-jobs! (fn [_] nil)}
     :user-repository
     {:list-users (fn [_] {:total 1 :rows [{:userId 42 :username "admin"}]})
      :get-user-detail (fn [id] (when (= 42 id) {:userId 42 :username "admin"}))
@@ -236,7 +243,13 @@
                                  {"oldPassword" "old" "newPassword" "new"})
         login-logs (invoke handler "/logs/loginLogs" "test-token")
         operation-logs (invoke handler "/logs/operationLogs" "test-token")
-        delete-login-log (invoke handler :delete "/logs/loginLogs" "test-token" nil)]
+        delete-login-log (invoke handler :delete "/logs/loginLogs" "test-token" nil)
+        jobs (invoke handler "/system/jobs" "test-token")
+        job (invoke handler "/system/jobs/1" "test-token")
+        job-logs (invoke handler "/system/jobs/logs" "test-token")
+        add-job (invoke handler :post "/system/jobs" "test-token"
+                        {"jobName" "demo" "jobGroup" "default" "invokeTarget" "noop"
+                         "cronExpression" "0/5 * * * * ?"})]
     (is (= 1 (get-in users [:json "data" "total"])))
     (is (= "admin" (get-in user [:json "data" "username"])))
     (is (= "admin" (get-in role [:json "data" "roleKey"])))
@@ -258,4 +271,8 @@
     (is (= 0 (get-in update-password [:json "code"])))
     (is (= 1 (get-in login-logs [:json "data" "total"])))
     (is (= 1 (get-in operation-logs [:json "data" "total"])))
-    (is (= 0 (get-in delete-login-log [:json "code"])))) )
+    (is (= 0 (get-in delete-login-log [:json "code"])))
+    (is (= 1 (get-in jobs [:json "data" "total"])))
+    (is (= "demo" (get-in job [:json "data" "jobName"])))
+    (is (= 1 (get-in job-logs [:json "data" "total"])))
+    (is (= 0 (get-in add-job [:json "code"])))) )

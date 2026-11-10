@@ -31,7 +31,8 @@
 - [ ] Frontend E2E parity
 
 ## P2: operations
-- [ ] Cron jobs, execution logs, failure/retry/concurrency policies
+- [x] Cron job definitions and execution-log query APIs
+- [ ] Cron scheduler execution, failure/retry/concurrency policies
 - [ ] Rate limits, idempotency, metrics and audit
 - [ ] Performance and deployment benchmarks versus Java Keystone
 

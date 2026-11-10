@@ -382,6 +382,17 @@
         delete-operation-log-handler (authorize (fn [request]
                                                   (query-ids-write admin-repo :delete-operation-logs! request "operationIds"))
                                                 "monitor:operlog:remove")
+        job-list-handler (with-repository-function admin-repo :list-jobs
+                           (partial management-list admin-repo :list-jobs))
+        job-detail-handler (with-repository-function admin-repo :get-job
+                             (partial management-detail admin-repo :get-job "任务"))
+        job-log-list-handler (with-repository-function admin-repo :list-job-logs
+                               (partial management-list admin-repo :list-job-logs))
+        add-job-handler (authorize (fn [request] (body-write admin-repo :add-job! request)) "system:job:add")
+        update-job-handler (authorize (fn [request] (path-id-body-write admin-repo :update-job! request :id)) "system:job:edit")
+        update-job-status-handler (authorize (fn [request] (id-status-write admin-repo :update-job-status! request)) "system:job:changeStatus")
+        delete-job-handler (authorize (fn [request] (query-ids-write admin-repo :delete-jobs! request "jobIds")) "system:job:remove")
+        run-job-handler (authorize (fn [_] (response/unavailable)) "system:job:run")
         dict-data-list-handler (with-repository-function repo :list-data
                                  (partial management-list repo :list-data))
         dict-data-detail-handler (with-repository-function repo :get-data
@@ -488,6 +499,21 @@
                   {:get cache-info-handler}]
                  ["/monitor/serverInfo"
                   {:get server-info-handler}]
+                 ["/system/jobs"
+                  {:get (authorize job-list-handler "system:job:list")
+                   :post add-job-handler
+                   :delete delete-job-handler}]
+                 ["/system/jobs/invoke-targets"
+                  {:get (authorize (fn [_] (response/ok [])) "system:job:list")}]
+                 ["/system/jobs/logs"
+                  {:get (authorize job-log-list-handler "system:job:list")}]
+                 ["/system/jobs/:id"
+                  {:get (authorize job-detail-handler "system:job:query")
+                   :put update-job-handler}]
+                 ["/system/jobs/:id/status"
+                  {:put update-job-status-handler}]
+                 ["/system/jobs/:id/run"
+                  {:post run-job-handler}]
                  ["/system/dict/types"
                   {:get (authorize dict-list "system:dict:list")}]
                  ["/system/dict/type/list"

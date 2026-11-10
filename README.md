@@ -81,6 +81,8 @@ Login and operation log query/delete endpoints are available under
 Online session management and server/cache summaries are available under
 `/monitor/onlineUsers`, `/monitor/onlineUser/:tokenId`, `/monitor/serverInfo`
 and `/monitor/cacheInfo`.
+Job definitions and execution-log queries are available under `/system/jobs*`;
+job execution remains unavailable until a safe target registry and scheduler are configured.
 | GET | /system/dict/types | Read-only, requires DB and authentication |
 | GET | /system/dict/type/list | Alias of dictionary type list |
 | GET | /system/dict/type/:dictId | Read-only dictionary type details |
