@@ -14,7 +14,7 @@
 - [x] RS256 JWT signature, issuer and expiry verification with session hook
 - [x] Redis refresh sessions, rotation, revocation and force-login service
 - [x] JWT RBAC permissions and database-backed dynamic router lookup
-- [ ] Departmental data-scope filtering
+- [x] Departmental data-scope filtering for user list queries
 - [x] User, role, menu, dept and post read APIs
 - [x] User, role, menu, dept and post write APIs
 - [x] Dictionary type/data write APIs and cache invalidation

@@ -143,7 +143,9 @@
       (response/unavailable))))
 
 (defn- management-list [repo function-key request]
-  (response/ok ((get repo function-key) (:query-params request))))
+  (let [params (cond-> (:query-params request)
+                 (= function-key :list-users) (assoc :principal (:principal request)))]
+    (response/ok ((get repo function-key) params))))
 
 (defn- management-detail [repo function-key entity request]
   (let [id (schema/positive-id (get-in request [:path-params :id]))]

@@ -19,6 +19,8 @@
               :password (BCrypt/hashpw "secret" (BCrypt/gensalt 4))
               :status 1
               :role-key "admin"
+              :data-scope 5
+              :dept-id 10
               :permissions #{"system:dict:list"}}
         service (auth/make-service
                  {:key-pair pair
@@ -35,6 +37,8 @@
     (is (string? (:refreshToken issued)))
     (is (= "7" (:user-id principal)))
     (is (contains? (:permissions principal) "system:dict:list"))
+    (is (= 5 (:data-scope principal)))
+    (is (= 10 (:dept-id principal)))
     (is (not= (:token issued) (:token refreshed)))
     (is (nil? ((:authenticate service) (:token issued))))
     (is ((:authenticate service) (:token refreshed)))))

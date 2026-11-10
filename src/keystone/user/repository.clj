@@ -277,6 +277,8 @@
    :deptName (:dept_name row)
    :roleName (:role_name row)
    :roleKey (:role_key row)
+   :dataScope (:data_scope row)
+   :deptIdSet (split-ids (:dept_id_set row))
    :postName (:post_name row)})
 
 (defn- permissions [datasource user]
@@ -301,6 +303,7 @@
           u.nickname, u.user_type, u.email, u.phone_number, u.sex, u.avatar,
           u.password, u.status, u.login_ip, u.login_date, u.is_admin,
           u.remark, u.create_time, d.dept_name, r.role_name, r.role_key,
+          r.data_scope, r.dept_id_set,
           p.post_name
      FROM sys_user u
      LEFT JOIN sys_dept d ON d.dept_id = u.dept_id AND d.deleted = 0
@@ -403,9 +406,29 @@
   (dissoc user :password :permissions :roleKey :isAdmin))
 
 (defn list-users [datasource params]
-  (let [page (page-value params "pageNum" 1)
+  (let [principal (:principal params)
+        params (dissoc params :principal)
+        scope (long (or (:data-scope principal) 1))
+        principal-user-id (or (:user-id principal) (get-in principal [:claims "sub"]))
+        principal-dept-id (or (:dept-id principal) (get-in principal [:claims "deptId"]))
+        principal-dept-ids (or (:dept-ids principal) (get-in principal [:claims "deptIds"]) [])
+        scope-condition (case scope
+                          5 "u.user_id = ?"
+                          3 "u.dept_id = ?"
+                          4 "u.dept_id IN (SELECT dept_id FROM sys_dept WHERE FIND_IN_SET(?, ancestors) OR dept_id = ?)"
+                          2 (when (seq principal-dept-ids)
+                              (str "u.dept_id IN (" (str/join "," (repeat (count principal-dept-ids) "?")) ")"))
+                          nil)
+        scope-values (case scope
+                       5 [principal-user-id]
+                       3 [principal-dept-id]
+                       4 [principal-dept-id principal-dept-id]
+                       2 (vec principal-dept-ids)
+                       [])
+        page (page-value params "pageNum" 1)
         size (min 100 (page-value params "pageSize" 10))
-        conditions (cond-> ["u.deleted = 0"]
+        conditions (cond-> (cond-> ["u.deleted = 0"]
+                             scope-condition (conj scope-condition))
                      (not (str/blank? (get params "username")))
                      (conj "u.username LIKE ?")
                      (not (str/blank? (get params "phoneNumber")))
@@ -414,7 +437,7 @@
                      (conj "u.status = ?")
                      (some? (get params "deptId"))
                      (conj "u.dept_id = ?"))
-        values (cond-> []
+        values (cond-> scope-values
                  (not (str/blank? (get params "username")))
                  (conj (str "%" (get params "username") "%"))
                  (not (str/blank? (get params "phoneNumber")))

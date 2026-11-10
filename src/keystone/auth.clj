@@ -223,13 +223,19 @@
                                        (* 1000 (long refresh-ttl-seconds)))
                         permissions (vec (or (:permissions user) []))
                         role-key (or (:role-key user) (:roleKey user))
+                        data-scope (or (:data-scope user) (:dataScope user) 1)
+                        dept-id (or (:dept-id user) (:deptId user))
+                        dept-ids (or (:dept-ids user) (:deptIdSet user) [])
                         claims (cond-> {"sub" account-id
                                        "iss" issuer
                                        "iat" issued-at
                                        "exp" access-exp
                                        "jti" access-jti
                                        "sid" session-id
-                                       "permissions" permissions}
+                                       "permissions" permissions
+                                       "dataScope" data-scope
+                                       "deptIds" (vec dept-ids)}
+                                 dept-id (assoc "deptId" dept-id)
                                  role-key (assoc "roleKey" role-key))
                         session {:id session-id
                                  :account-id account-id
@@ -263,6 +269,9 @@
                                                    (get principal "userId"))
                                       :permissions (set (or (get principal "permissions") []))
                                       :role-key (get principal "roleKey")
+                                      :data-scope (get principal "dataScope")
+                                      :dept-id (get principal "deptId")
+                                      :dept-ids (get principal "deptIds")
                                       :claims principal})))
                  :login! (fn [body]
                            (let [username (or (get body "username") (:username body))

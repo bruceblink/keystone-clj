@@ -83,6 +83,8 @@ Online session management and server/cache summaries are available under
 and `/monitor/cacheInfo`.
 Job definitions and execution-log queries are available under `/system/jobs*`;
 job execution remains unavailable until a safe target registry and scheduler are configured.
+User list queries enforce the signed role data scope for all/custom/current
+department/current subtree/self modes.
 | GET | /system/dict/types | Read-only, requires DB and authentication |
 | GET | /system/dict/type/list | Alias of dictionary type list |
 | GET | /system/dict/type/:dictId | Read-only dictionary type details |
