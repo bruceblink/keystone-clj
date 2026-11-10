@@ -7,6 +7,12 @@
 
 (def jdbc-options {:builder-fn rs/as-unqualified-lower-maps})
 
+(defn- as-int [value]
+  (cond
+    (boolean? value) (if value 1 0)
+    (nil? value) 0
+    :else (long value)))
+
 (declare first-row find-by-id)
 
 (defn- query [datasource sql params]
@@ -49,8 +55,8 @@
                 "INSERT INTO sys_user
                  (post_id, role_id, dept_id, username, nickname, user_type, email,
                   phone_number, sex, avatar, password, status, is_admin, remark,
-                  create_time, deleted)
-                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?, NOW(), 0)"
+                  create_time)
+                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?, NOW())"
                 [(body-value body "postId") (body-value body "roleId")
                  (body-value body "deptId") username nickname
                  (or (body-value body "userType") 0) (or (body-value body "email") "")
@@ -74,14 +80,14 @@
       (execute! tx
                 (str "UPDATE sys_user SET "
                      (str/join ", " (map (fn [[column _]] (str column " = ?")) selected))
-                     ", update_time = NOW() WHERE user_id = ? AND deleted = 0")
+                     ", update_time = NOW() WHERE user_id = ?")
                 (conj (mapv second selected) user-id)))
     nil))
 
 (defn reset-user-password! [datasource user-id body]
   (let [password (required-body body "password")]
     (execute! datasource
-              "UPDATE sys_user SET password = ?, update_time = NOW() WHERE user_id = ? AND deleted = 0"
+              "UPDATE sys_user SET password = ?, update_time = NOW() WHERE user_id = ?"
               [(BCrypt/hashpw password (BCrypt/gensalt 10)) user-id])
     nil))
 
@@ -89,14 +95,14 @@
   (let [ids (split-ids ids)]
     (when (empty? ids) (throw (ex-info "userIds is required" {:type :validation})))
     (execute! datasource
-              (str "UPDATE sys_user SET deleted = 1, update_time = NOW() WHERE user_id IN ("
+              (str "DELETE FROM sys_user WHERE user_id IN ("
                    (str/join "," (repeat (count ids) "?")) ")") ids)
     nil))
 
 (defn change-user-status! [datasource user-id body]
   (let [status (required-body body "status")]
     (execute! datasource
-              "UPDATE sys_user SET status = ?, update_time = NOW() WHERE user_id = ? AND deleted = 0"
+              "UPDATE sys_user SET status = ?, update_time = NOW() WHERE user_id = ?"
               [status user-id])
     nil))
 
@@ -105,8 +111,8 @@
     (execute! tx
               "INSERT INTO sys_role
                (role_name, role_key, role_sort, data_scope, dept_id_set, status,
-                remark, create_time, deleted)
-               VALUES (?, ?, ?, ?, ?, ?, ?, NOW(), 0)"
+                remark, create_time)
+               VALUES (?, ?, ?, ?, ?, ?, ?, NOW())"
               [(required-body body "roleName") (required-body body "roleKey")
                (or (body-value body "roleSort") 0) (or (body-value body "dataScope") 2)
                (str/join "," (or (body-value body "selectedDeptList") []))
@@ -120,7 +126,7 @@
       (execute! tx
                 "UPDATE sys_role SET role_name = ?, role_key = ?, role_sort = ?,
                         data_scope = ?, dept_id_set = ?, status = ?, remark = ?, update_time = NOW()
-                   WHERE role_id = ? AND deleted = 0"
+                   WHERE role_id = ?"
                 [(required-body body "roleName") (required-body body "roleKey")
                  (or (body-value body "roleSort") 0) (or (body-value body "dataScope") 2)
                  (str/join "," (or (body-value body "selectedDeptList") []))
@@ -131,12 +137,12 @@
 
 (defn delete-role! [datasource role-id]
   (jdbc/with-transaction [tx datasource]
-    (execute! tx "UPDATE sys_role SET deleted = 1, update_time = NOW() WHERE role_id = ?" [role-id])
+    (execute! tx "DELETE FROM sys_role WHERE role_id = ?" [role-id])
     (execute! tx "DELETE FROM sys_role_menu WHERE role_id = ?" [role-id]))
   nil)
 
 (defn change-role-status! [datasource role-id body]
-  (execute! datasource "UPDATE sys_role SET status = ?, update_time = NOW() WHERE role_id = ? AND deleted = 0"
+  (execute! datasource "UPDATE sys_role SET status = ?, update_time = NOW() WHERE role_id = ?"
             [(required-body body "status") role-id])
   nil)
 
@@ -145,8 +151,8 @@
     (execute! datasource
               "INSERT INTO sys_menu
                (menu_name, menu_type, router_name, parent_id, path, is_button,
-                permission, meta_info, status, remark, create_time, deleted)
-               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW(), 0)"
+                permission, meta_info, status, remark, create_time)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW())"
               [(required-body body "menuName") (or (body-value body "menuType") 1)
                (or (body-value body "routerName") "") (or (body-value body "parentId") 0)
                (or (body-value body "path") "") (if (body-value body "isButton") 1 0)
@@ -160,7 +166,7 @@
               "UPDATE sys_menu SET menu_name = ?, menu_type = ?, router_name = ?,
                       parent_id = ?, path = ?, is_button = ?, permission = ?, meta_info = ?,
                       status = ?, update_time = NOW()
-                 WHERE menu_id = ? AND deleted = 0"
+                 WHERE menu_id = ?"
               [(required-body body "menuName") (or (body-value body "menuType") 1)
                (or (body-value body "routerName") "") (or (body-value body "parentId") 0)
                (or (body-value body "path") "") (if (body-value body "isButton") 1 0)
@@ -169,22 +175,22 @@
   nil)
 
 (defn delete-menu! [datasource menu-id]
-  (let [children (first-row datasource "SELECT COUNT(*) AS total FROM sys_menu WHERE parent_id = ? AND deleted = 0"
+  (let [children (first-row datasource "SELECT COUNT(*) AS total FROM sys_menu WHERE parent_id = ?"
                              [menu-id])
         assigned (first-row datasource "SELECT COUNT(*) AS total FROM sys_role_menu WHERE menu_id = ?" [menu-id])]
     (when (pos? (long (:total children)))
       (throw (ex-info "存在子菜单不允许删除" {:type :conflict :code 10904})))
     (when (pos? (long (:total assigned)))
       (throw (ex-info "菜单已分配给角色，不允许" {:type :conflict :code 10905})))
-    (execute! datasource "UPDATE sys_menu SET deleted = 1, update_time = NOW() WHERE menu_id = ?" [menu-id]))
+    (execute! datasource "DELETE FROM sys_menu WHERE menu_id = ?" [menu-id]))
   nil)
 
 (defn add-dept! [datasource body]
   (execute! datasource
             "INSERT INTO sys_dept
              (parent_id, ancestors, dept_name, order_num, leader_name, phone, email,
-              status, create_time, deleted)
-             VALUES (?, '', ?, ?, ?, ?, ?, ?, NOW(), 0)"
+              status, create_time)
+             VALUES (?, '', ?, ?, ?, ?, ?, ?, NOW())"
             [(or (body-value body "parentId") 0) (required-body body "deptName")
              (or (body-value body "orderNum") 0) (or (body-value body "leaderName") "")
              (or (body-value body "phone") "") (or (body-value body "email") "")
@@ -195,7 +201,7 @@
   (execute! datasource
             "UPDATE sys_dept SET parent_id = ?, dept_name = ?, order_num = ?, leader_name = ?,
                     phone = ?, email = ?, status = ?, update_time = NOW()
-               WHERE dept_id = ? AND deleted = 0"
+               WHERE dept_id = ?"
             [(or (body-value body "parentId") 0) (required-body body "deptName")
              (or (body-value body "orderNum") 0) (or (body-value body "leaderName") "")
              (or (body-value body "phone") "") (or (body-value body "email") "")
@@ -203,21 +209,21 @@
   nil)
 
 (defn delete-dept! [datasource dept-id]
-  (let [children (first-row datasource "SELECT COUNT(*) AS total FROM sys_dept WHERE parent_id = ? AND deleted = 0"
+  (let [children (first-row datasource "SELECT COUNT(*) AS total FROM sys_dept WHERE parent_id = ?"
                              [dept-id])
-        users (first-row datasource "SELECT COUNT(*) AS total FROM sys_user WHERE dept_id = ? AND deleted = 0"
+        users (first-row datasource "SELECT COUNT(*) AS total FROM sys_user WHERE dept_id = ?"
                           [dept-id])]
     (when (pos? (long (:total children)))
       (throw (ex-info "该部门存在下级部门不允许删除" {:type :conflict :code 10804})))
     (when (pos? (long (:total users)))
       (throw (ex-info "该部门存在关联的用户不允许删除" {:type :conflict :code 10805})))
-    (execute! datasource "UPDATE sys_dept SET deleted = 1, update_time = NOW() WHERE dept_id = ?" [dept-id]))
+    (execute! datasource "DELETE FROM sys_dept WHERE dept_id = ?" [dept-id]))
   nil)
 
 (defn add-post! [datasource body]
   (execute! datasource
-            "INSERT INTO sys_post (post_code, post_name, post_sort, status, remark, create_time, deleted)
-             VALUES (?, ?, ?, ?, ?, NOW(), 0)"
+            "INSERT INTO sys_post (post_code, post_name, post_sort, status, remark, create_time)
+             VALUES (?, ?, ?, ?, ?, NOW())"
             [(required-body body "postCode") (required-body body "postName")
              (or (body-value body "postSort") 0) (or (body-value body "status") 1)
              (or (body-value body "remark") "")])
@@ -226,7 +232,7 @@
 (defn update-post! [datasource body]
   (execute! datasource
             "UPDATE sys_post SET post_code = ?, post_name = ?, post_sort = ?, status = ?,
-                    remark = ?, update_time = NOW() WHERE post_id = ? AND deleted = 0"
+                    remark = ?, update_time = NOW() WHERE post_id = ?"
             [(required-body body "postCode") (required-body body "postName")
              (or (body-value body "postSort") 0) (or (body-value body "status") 1)
              (or (body-value body "remark") "") (Long/parseLong (str (required-body body "postId")))])
@@ -237,10 +243,10 @@
     (when (empty? ids) (throw (ex-info "ids is required" {:type :validation})))
     (let [placeholders (str/join "," (repeat (count ids) "?"))]
       (when (pos? (long (:total (first-row datasource
-                                           (str "SELECT COUNT(*) AS total FROM sys_user WHERE post_id IN (" placeholders ") AND deleted = 0")
+                                           (str "SELECT COUNT(*) AS total FROM sys_user WHERE post_id IN (" placeholders ")")
                                            ids))))
         (throw (ex-info "职位已分配给用户，请先取消分配再删除" {:type :conflict :code 10703})))
-      (execute! datasource (str "UPDATE sys_post SET deleted = 1, update_time = NOW() WHERE post_id IN ("
+      (execute! datasource (str "DELETE FROM sys_post WHERE post_id IN ("
                                placeholders ")") ids)))
   nil)
 
@@ -271,7 +277,7 @@
    :status (:status row)
    :loginIp (:login_ip row)
    :loginDate (some-> (:login_date row) str)
-   :isAdmin (= 1 (long (or (:is_admin row) 0)))
+   :isAdmin (= 1 (as-int (:is_admin row)))
    :remark (:remark row)
    :createTime (some-> (:create_time row) str)
    :deptName (:dept_name row)
@@ -290,7 +296,6 @@
                    INNER JOIN sys_role_menu rm ON rm.menu_id = m.menu_id
                   WHERE rm.role_id = ?
                     AND m.status = 1
-                    AND m.deleted = 0
                     AND m.permission IS NOT NULL
                     AND m.permission <> ''"
                 [(:roleId user)])
@@ -306,10 +311,10 @@
           r.data_scope, r.dept_id_set,
           p.post_name
      FROM sys_user u
-     LEFT JOIN sys_dept d ON d.dept_id = u.dept_id AND d.deleted = 0
-     LEFT JOIN sys_role r ON r.role_id = u.role_id AND r.deleted = 0
-     LEFT JOIN sys_post p ON p.post_id = u.post_id AND p.deleted = 0
-    WHERE u.deleted = 0 AND ")
+     LEFT JOIN sys_dept d ON d.dept_id = u.dept_id
+     LEFT JOIN sys_role r ON r.role_id = u.role_id
+     LEFT JOIN sys_post p ON p.post_id = u.post_id
+    WHERE 1 = 1 AND ")
 
 (defn find-by-username [datasource username]
   (when-let [row (first-row datasource
@@ -337,7 +342,7 @@
                    m.parent_id, m.path, m.is_button, m.permission, m.meta_info,
                    m.status, m.remark, m.create_time
               FROM sys_menu m
-             WHERE m.deleted = 0 AND m.status = 1
+             WHERE 1 = 1 AND m.status = 1
              ORDER BY m.parent_id ASC, m.menu_id ASC"
            [])
     (query datasource
@@ -346,7 +351,7 @@
                    m.status, m.remark, m.create_time
               FROM sys_menu m
               INNER JOIN sys_role_menu rm ON rm.menu_id = m.menu_id
-             WHERE rm.role_id = ? AND m.deleted = 0 AND m.status = 1
+             WHERE rm.role_id = ? AND m.status = 1
              ORDER BY m.parent_id ASC, m.menu_id ASC"
            [(:roleId user)])))
 
@@ -358,7 +363,7 @@
    :path (:path row)
    :permission (:permission row)
    :menuType (:menu_type row)
-   :isButton (= 1 (long (or (:is_button row) 0)))
+   :isButton (= 1 (as-int (:is_button row)))
    :status (:status row)
    :meta (parse-meta (:meta_info row))
    :createTime (some-> (:create_time row) str)})
@@ -382,7 +387,7 @@
   (let [rows (query datasource
                     "SELECT dict_type, dict_label, dict_value, list_class
                        FROM sys_dict_data
-                      WHERE deleted = 0 AND status = 1
+                      WHERE 1 = 1 AND status = 1
                       ORDER BY dict_type, dict_sort, dict_code"
                     [])]
     (reduce (fn [result row]
@@ -427,7 +432,7 @@
                        [])
         page (page-value params "pageNum" 1)
         size (min 100 (page-value params "pageSize" 10))
-        conditions (cond-> (cond-> ["u.deleted = 0"]
+        conditions (cond-> (cond-> ["1 = 1"]
                              scope-condition (conj scope-condition))
                      (not (str/blank? (get params "username")))
                      (conj "u.username LIKE ?")
@@ -454,9 +459,9 @@
                               u.remark, u.create_time, d.dept_name, r.role_name,
                               p.post_name
                          FROM sys_user u
-                         LEFT JOIN sys_dept d ON d.dept_id = u.dept_id AND d.deleted = 0
-                         LEFT JOIN sys_role r ON r.role_id = u.role_id AND r.deleted = 0
-                         LEFT JOIN sys_post p ON p.post_id = u.post_id AND p.deleted = 0
+                         LEFT JOIN sys_dept d ON d.dept_id = u.dept_id
+                         LEFT JOIN sys_role r ON r.role_id = u.role_id
+                         LEFT JOIN sys_post p ON p.post_id = u.post_id
                         WHERE " where
                         " ORDER BY u.user_id DESC LIMIT ? OFFSET ?")]
     (page-result datasource count-sql values rows-sql values page size
@@ -485,7 +490,7 @@
     (execute! datasource
               (str "UPDATE sys_user SET "
                    (str/join ", " (map (fn [[column _]] (str column " = ?")) fields))
-                   ", update_time = NOW() WHERE user_id = ? AND deleted = 0")
+                   ", update_time = NOW() WHERE user_id = ?")
               (conj (mapv second fields) user-id)))
   nil)
 
@@ -498,13 +503,13 @@
     (when (= old-password new-password)
       (throw (ex-info "用户新密码与旧密码相同" {:type :validation})))
     (execute! datasource
-              "UPDATE sys_user SET password = ?, update_time = NOW() WHERE user_id = ? AND deleted = 0"
+              "UPDATE sys_user SET password = ?, update_time = NOW() WHERE user_id = ?"
               [(BCrypt/hashpw new-password (BCrypt/gensalt 10)) user-id]))
   nil)
 
 (defn update-avatar! [datasource user-id avatar]
   (execute! datasource
-            "UPDATE sys_user SET avatar = ?, update_time = NOW() WHERE user_id = ? AND deleted = 0"
+            "UPDATE sys_user SET avatar = ?, update_time = NOW() WHERE user_id = ?"
             [avatar user-id])
   nil)
 
@@ -526,7 +531,7 @@
 (defn list-roles [datasource params]
   (let [page (page-value params "pageNum" 1)
         size (min 100 (page-value params "pageSize" 10))
-        conditions (cond-> ["deleted = 0"]
+        conditions (cond-> ["1 = 1"]
                      (not (str/blank? (get params "roleName")))
                      (conj "role_name LIKE ?")
                      (not (str/blank? (get params "roleKey")))
@@ -553,13 +558,13 @@
   (when-let [row (first-row datasource
                             "SELECT role_id, role_name, role_key, role_sort, data_scope,
                                     dept_id_set, status, remark, create_time
-                               FROM sys_role WHERE role_id = ? AND deleted = 0"
+                               FROM sys_role WHERE role_id = ?"
                             [role-id])]
     (let [menu-ids (query datasource "SELECT menu_id FROM sys_role_menu WHERE role_id = ? ORDER BY menu_id"
                            [role-id])]
       (role-row->dto row (mapv :menu_id menu-ids)))))
 
-(defn- menu-status [status] (if (= 1 (long (or status 0))) "正常" "停用"))
+(defn- menu-status [status] (if (= 1 (as-int status)) "正常" "停用"))
 (defn- menu-type [type] ({1 "菜单" 2 "目录" 3 "内链" 4 "外链" 0 "按钮"} type))
 
 (defn- menu-row->management-dto [row]
@@ -574,7 +579,7 @@
      :icon (get meta "icon")
      :menuType (:menu_type row)
      :menuTypeStr (menu-type (:menu_type row))
-     :isButton (= 1 (long (or (:is_button row) 0)))
+     :isButton (= 1 (as-int (:is_button row)))
      :status (:status row)
      :statusStr (menu-status (:status row))
      :meta meta
@@ -583,7 +588,7 @@
 (def menu-select
   "SELECT menu_id, menu_name, menu_type, router_name, parent_id, path,
           is_button, permission, meta_info, status, remark, create_time
-     FROM sys_menu WHERE deleted = 0")
+     FROM sys_menu WHERE 1 = 1")
 
 (defn list-menu-management [datasource params]
   (let [button (get params "isButton")
@@ -619,11 +624,11 @@
    :phone (:phone row)
    :email (:email row)
    :status (:status row)
-   :statusStr (if (= 1 (long (or (:status row) 0))) "正常" "停用")
+   :statusStr (if (= 1 (as-int (:status row))) "正常" "停用")
    :createTime (some-> (:create_time row) str)})
 
 (defn list-depts [datasource params]
-  (let [conditions (cond-> ["deleted = 0"]
+  (let [conditions (cond-> ["1 = 1"]
                      (some? (get params "parentId")) (conj "parent_id = ?"))
         values (cond-> [] (some? (get params "parentId")) (conj (get params "parentId")))]
     (mapv dept-row->dto
@@ -638,7 +643,7 @@
   (some-> (first-row datasource
                      "SELECT dept_id, parent_id, dept_name, order_num, leader_name,
                              phone, email, status, create_time
-                        FROM sys_dept WHERE dept_id = ? AND deleted = 0"
+                        FROM sys_dept WHERE dept_id = ?"
                      [dept-id])
           dept-row->dto))
 
@@ -659,14 +664,14 @@
    :postName (:post_name row)
    :postSort (:post_sort row)
    :status (:status row)
-   :statusStr (if (= 1 (long (or (:status row) 0))) "正常" "停用")
+   :statusStr (if (= 1 (as-int (:status row))) "正常" "停用")
    :remark (:remark row)
    :createTime (some-> (:create_time row) str)})
 
 (defn list-posts [datasource params]
   (let [page (page-value params "pageNum" 1)
         size (min 100 (page-value params "pageSize" 10))
-        conditions (cond-> ["deleted = 0"]
+        conditions (cond-> ["1 = 1"]
                      (not (str/blank? (get params "postCode"))) (conj "post_code LIKE ?")
                      (not (str/blank? (get params "postName"))) (conj "post_name LIKE ?")
                      (some? (get params "status")) (conj "status = ?"))
@@ -688,7 +693,7 @@
 (defn get-post [datasource post-id]
   (some-> (first-row datasource
                      "SELECT post_id, post_code, post_name, post_sort, status, remark,
-                             create_time FROM sys_post WHERE post_id = ? AND deleted = 0"
+                             create_time FROM sys_post WHERE post_id = ?"
                      [post-id])
           post-row->dto))
 

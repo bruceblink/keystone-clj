@@ -126,9 +126,11 @@
       (response/ok))
     (auth-unavailable)))
 
-(defn- get-config [repo auth-state]
+(defn- get-config [repo user-repo auth-state]
   (response/ok {:isCaptchaOn (boolean (:captcha-enabled? auth-state))
-                :dictionary (if repo ((:dictionary-data-map repo)) {})}))
+                :dictionary (if (and user-repo (fn? (:dictionary-data-map user-repo)))
+                              ((:dictionary-data-map user-repo))
+                              {})}))
 
 (defn- current-user [repo request]
   (if-let [user ((:find-by-id repo) (get-in request [:principal :user-id]))]
@@ -322,7 +324,7 @@
         dict-list (with-repository repo (partial list-types repo))
         dict-one (with-repository repo (partial get-type repo))
         dict-data (with-repository repo (partial list-data-by-type repo))
-        config-handler (rate/wrap (fn [_] (get-config repo auth)) limiter 10000 5 global-key)
+        config-handler (rate/wrap (fn [_] (get-config repo user-repo auth)) limiter 10000 5 global-key)
         captcha-handler (rate/wrap (fn [_] (captcha-response auth)) limiter 10000 10 client-key)
         rsa-handler (rate/wrap (fn [_] (rsa-public-key auth)) limiter 60000 60 client-key)
         login-handler (rate/wrap (fn [request] (login auth request)) limiter 60000 10 client-key)

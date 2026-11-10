@@ -44,8 +44,8 @@
 (defn list-types [datasource query]
   (let [{:keys [pageNum pageSize]} query
         where (filters query)
-        base (cond-> {:from [:sys_dict_type] :where [:= :deleted 0]}
-               where (assoc :where [:and [:= :deleted 0] where]))
+        base (cond-> {:from [:sys_dict_type]}
+               where (assoc :where where))
         total (-> (execute! datasource (assoc base :select [[[:count :*] :total]]))
                   first :total)
         rows (execute! datasource
@@ -63,7 +63,7 @@
                     {:select [:dict_id :dict_name :dict_type :status
                               :remark :create_time]
                      :from [:sys_dict_type]
-                    :where [:and [:= :dict_id id] [:= :deleted 0]]
+                    :where [:= :dict_id id]
                      :limit 1})
           first row->type))
 
@@ -75,7 +75,7 @@
                                    :dict_sort :is_default :css_class :list_class
                                    :status :remark :create_time]
                           :from [:sys_dict_data]
-                          :where [:and [:= :dict_type dict-type] [:= :deleted 0] [:= :status 1]]
+                          :where [:and [:= :dict_type dict-type] [:= :status 1]]
                           :order-by [[:dict_sort :asc] [:dict_code :asc]]})
           result (mapv row->data rows)]
       (when cache (.put ^Cache cache dict-type result))
@@ -101,8 +101,8 @@
                      (some? (get query "status"))
                      (conj [:= :status (Long/parseLong (str (get query "status")))]))
         where (when (seq conditions) (into [:and] conditions))
-        base (cond-> {:from [:sys_dict_data] :where [:= :deleted 0]}
-               where (assoc :where [:and [:= :deleted 0] where]))
+        base (cond-> {:from [:sys_dict_data]}
+               where (assoc :where where))
         count (first (execute! datasource (assoc base :select [[[:count :*] :total]])))
         rows (execute! datasource (assoc base
                                          :select [:dict_code :dict_type :dict_label :dict_value
@@ -120,10 +120,10 @@
 (defn add-type! [datasource body]
   (execute! datasource
             {:insert-into :sys_dict_type
-             :columns [:dict_name :dict_type :status :remark :create_time :deleted]
+             :columns [:dict_name :dict_type :status :remark :create_time]
              :values [[(required-body body "dictName") (required-body body "dictType")
                        (or (body-value body "status") 1) (or (body-value body "remark") "")
-                       [:now] 0]]})
+                       [:now]]]})
   nil)
 
 (defn update-type! [datasource id body]
@@ -134,23 +134,24 @@
                    :status (or (body-value body "status") 1)
                    :remark (or (body-value body "remark") "")
                    :update_time [:now]}
-             :where [:and [:= :dict_id id] [:= :deleted 0]]})
+             :where [:= :dict_id id]})
   nil)
 
 (defn delete-type! [datasource id]
-  (let [count (first (execute! datasource
-                              {:select [[[:count :*] :total]]
-                               :from [:sys_dict_data]
-                               :where [:and [:= :dict_type
-                                             (or (:dict_type (first (execute! datasource
-                                                                          {:select [:dict_type]
-                                                                           :from [:sys_dict_type]
-                                                                           :where [:= :dict_id id]
-                                                                           :limit 1}))) "")]
-                                             [:= :deleted 0]]}))]
+  (let [dict-type (:dict_type (first (execute! datasource
+                                               {:select [:dict_type]
+                                                :from [:sys_dict_type]
+                                                :where [:= :dict_id id]
+                                                :limit 1})))
+        count (if dict-type
+                (first (execute! datasource
+                                 {:select [[[:count :*] :total]]
+                                  :from [:sys_dict_data]
+                                  :where [:= :dict_type dict-type]}))
+                {:total 0})]
     (when (pos? (long (or (:total count) 0)))
       (throw (ex-info "字典类型存在字典数据，不能删除" {:type :conflict :code 99999})))
-    (execute! datasource {:update :sys_dict_type :set {:deleted 1 :update_time [:now]}
+    (execute! datasource {:delete-from :sys_dict_type
                           :where [:= :dict_id id]}))
   nil)
 
@@ -158,12 +159,12 @@
   (execute! datasource
             {:insert-into :sys_dict_data
              :columns [:dict_type :dict_label :dict_value :dict_sort :is_default
-                       :css_class :list_class :status :remark :create_time :deleted]
+                       :css_class :list_class :status :remark :create_time]
              :values [[(required-body body "dictType") (required-body body "dictLabel")
                        (required-body body "dictValue") (or (body-value body "dictSort") 0)
                        (or (body-value body "isDefault") 0) (or (body-value body "cssClass") "")
                        (or (body-value body "listClass") "") (or (body-value body "status") 1)
-                       (or (body-value body "remark") "") [:now] 0]]})
+                       (or (body-value body "remark") "") [:now]]]})
   (invalidate-cache! cache)
   nil)
 
@@ -172,7 +173,7 @@
                                          :dict_sort :is_default :css_class :list_class
                                          :status :remark :create_time]
                                 :from [:sys_dict_data]
-                                :where [:and [:= :dict_code id] [:= :deleted 0]]
+                                :where [:= :dict_code id]
                                 :limit 1}) first row->data))
 
 (defn update-data! [datasource cache id body]
@@ -188,12 +189,12 @@
                    :status (or (body-value body "status") 1)
                    :remark (or (body-value body "remark") "")
                    :update_time [:now]}
-             :where [:and [:= :dict_code id] [:= :deleted 0]]})
+             :where [:= :dict_code id]})
   (invalidate-cache! cache)
   nil)
 
 (defn delete-data! [datasource cache id]
-  (execute! datasource {:update :sys_dict_data :set {:deleted 1 :update_time [:now]}
+  (execute! datasource {:delete-from :sys_dict_data
                         :where [:= :dict_code id]})
   (invalidate-cache! cache)
   nil)

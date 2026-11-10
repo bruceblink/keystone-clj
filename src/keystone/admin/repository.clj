@@ -6,6 +6,12 @@
 
 (def jdbc-options {:builder-fn rs/as-unqualified-lower-maps})
 
+(defn- as-int [value]
+  (cond
+    (boolean? value) (if value 1 0)
+    (nil? value) 0
+    :else (long value)))
+
 (defn- query [datasource sql params]
   (jdbc/execute! datasource (into [sql] params) jdbc-options))
 
@@ -40,7 +46,7 @@
    :configOptions (json-array (:config_options row))
    :configValue (:config_value row)
    :isAllowChange (:is_allow_change row)
-   :isAllowChangeStr (if (= 1 (long (or (:is_allow_change row) 0))) "是" "否")
+   :isAllowChangeStr (if (= 1 (as-int (:is_allow_change row))) "是" "否")
    :remark (:remark row)
    :createTime (some-> (:create_time row) str)})
 
@@ -50,7 +56,7 @@
 
 (defn list-configs [datasource params]
   (let [[page size] (page params)
-        conditions (cond-> ["deleted = 0"]
+        conditions (cond-> ["1 = 1"]
                      (not (str/blank? (get params "configName"))) (conj "config_name LIKE ?")
                      (not (str/blank? (get params "configKey"))) (conj "config_key LIKE ?")
                      (some? (get params "isAllowChange")) (conj "is_allow_change = ?"))
@@ -70,15 +76,15 @@
 
 (defn get-config [datasource id]
   (some-> (first-row datasource (str "SELECT " config-columns
-                                     " FROM sys_config WHERE config_id = ? AND deleted = 0") [id])
+                                     " FROM sys_config WHERE config_id = ? AND 1 = 1") [id])
           config->dto))
 
 (defn add-config! [datasource body]
   (execute! datasource
             "INSERT INTO sys_config
              (config_name, config_key, config_options, config_value, is_allow_change,
-              remark, create_time, deleted)
-             VALUES (?, ?, ?, ?, ?, ?, NOW(), 0)"
+              remark, create_time)
+             VALUES (?, ?, ?, ?, ?, ?, NOW())"
             [(required body "configName") (required body "configKey")
              (json/write-value-as-string (or (value body "configOptions") []))
              (required body "configValue") (or (value body "isAllowChange") 1)
@@ -88,7 +94,7 @@
 (defn update-config! [datasource id body]
   (execute! datasource
             "UPDATE sys_config SET config_value = ?, update_time = NOW()
-               WHERE config_id = ? AND deleted = 0"
+               WHERE config_id = ? AND 1 = 1"
             [(required body "configValue") id])
   nil)
 
@@ -108,7 +114,7 @@
           n.status, n.create_time, u.nickname AS creator_name
      FROM sys_notice n
      LEFT JOIN sys_user u ON u.user_id = n.creator_id
-    WHERE n.deleted = 0")
+    WHERE 1 = 1")
 
 (defn list-notices [datasource params]
   (let [[page size] (page params)
@@ -120,7 +126,7 @@
                  (conj (str "%" (get params "noticeTitle") "%"))
                  (some? (get params "noticeType")) (conj (get params "noticeType")))
         suffix (if (seq conditions) (str " AND " (str/join " AND " conditions)) "")
-        total (:total (first-row datasource (str "SELECT COUNT(*) AS total FROM sys_notice n WHERE n.deleted = 0" suffix) values))
+        total (:total (first-row datasource (str "SELECT COUNT(*) AS total FROM sys_notice n WHERE 1 = 1" suffix) values))
         rows (query datasource
                      (str notice-select suffix " ORDER BY n.notice_id DESC LIMIT ? OFFSET ?")
                      (into values [size (* (dec page) size)]))]
@@ -132,8 +138,8 @@
 (defn add-notice! [datasource body creator-id]
   (execute! datasource
             "INSERT INTO sys_notice
-             (notice_title, notice_type, notice_content, status, creator_id, create_time, deleted)
-             VALUES (?, ?, ?, ?, ?, NOW(), 0)"
+             (notice_title, notice_type, notice_content, status, creator_id, create_time)
+             VALUES (?, ?, ?, ?, ?, NOW())"
             [(required body "noticeTitle") (or (value body "noticeType") 1)
              (or (value body "noticeContent") "") (or (value body "status") 1) creator-id])
   nil)
@@ -141,7 +147,7 @@
 (defn update-notice! [datasource id body]
   (execute! datasource
             "UPDATE sys_notice SET notice_title = ?, notice_type = ?, notice_content = ?,
-                    status = ?, update_time = NOW() WHERE notice_id = ? AND deleted = 0"
+                    status = ?, update_time = NOW() WHERE notice_id = ? AND 1 = 1"
             [(required body "noticeTitle") (or (value body "noticeType") 1)
              (or (value body "noticeContent") "") (or (value body "status") 1) id])
   nil)
@@ -151,7 +157,7 @@
                  (map #(Long/parseLong %)) distinct vec)]
     (when (empty? ids) (throw (ex-info "noticeIds is required" {:type :validation})))
     (execute! datasource
-              (str "UPDATE sys_notice SET deleted = 1, update_time = NOW() WHERE notice_id IN ("
+              (str "DELETE FROM sys_notice WHERE notice_id IN ("
                    (str/join "," (repeat (count ids) "?")) ")") ids))
   nil)
 
@@ -159,12 +165,12 @@
   {:logId (:info_id row) :username (:username row) :ipAddress (:ip_address row)
    :loginLocation (:login_location row) :browser (:browser row)
    :operationSystem (:operation_system row) :status (:status row)
-   :statusStr (if (= 1 (long (or (:status row) 0))) "成功" "失败")
+   :statusStr (if (= 1 (as-int (:status row))) "成功" "失败")
    :msg (:msg row) :loginTime (some-> (:login_time row) str)})
 
 (defn list-login-logs [datasource params]
   (let [[page size] (page params)
-        conditions (cond-> ["deleted = 0"]
+        conditions (cond-> ["1 = 1"]
                      (not (str/blank? (get params "username"))) (conj "username LIKE ?")
                      (not (str/blank? (get params "ipAddress"))) (conj "ip_address LIKE ?")
                      (some? (get params "status")) (conj "status = ?"))
@@ -187,7 +193,7 @@
                  (map #(Long/parseLong %)) distinct vec)]
     (when (empty? ids) (throw (ex-info "ids is required" {:type :validation})))
     (execute! datasource
-              (str "UPDATE sys_login_info SET deleted = 1 WHERE info_id IN ("
+              (str "DELETE FROM sys_login_info WHERE info_id IN ("
                    (str/join "," (repeat (count ids) "?")) ")") ids))
   nil)
 
@@ -200,12 +206,12 @@
    :username (:username row) :operatorIp (:operator_ip row) :deptId (:dept_id row)
    :deptName (:dept_name row) :operationParam (:operation_param row)
    :operationResult (:operation_result row) :status (:status row)
-   :statusStr (if (= 1 (long (or (:status row) 0))) "正常" "异常")
+   :statusStr (if (= 1 (as-int (:status row))) "正常" "异常")
    :errorStack (:error_stack row) :operationTime (some-> (:operation_time row) str)})
 
 (defn list-operation-logs [datasource params]
   (let [[page size] (page params)
-        conditions (cond-> ["deleted = 0"]
+        conditions (cond-> ["1 = 1"]
                      (not (str/blank? (get params "requestModule"))) (conj "request_module LIKE ?")
                      (not (str/blank? (get params "username"))) (conj "username LIKE ?")
                      (some? (get params "status")) (conj "status = ?"))
@@ -230,7 +236,7 @@
                  (map #(Long/parseLong %)) distinct vec)]
     (when (empty? ids) (throw (ex-info "operationIds is required" {:type :validation})))
     (execute! datasource
-              (str "UPDATE sys_operation_log SET deleted = 1 WHERE operation_id IN ("
+              (str "DELETE FROM sys_operation_log WHERE operation_id IN ("
                    (str/join "," (repeat (count ids) "?")) ")") ids))
   nil)
 
@@ -238,13 +244,13 @@
   {:jobId (:job_id row) :jobName (:job_name row) :jobGroup (:job_group row)
    :invokeTarget (:invoke_target row) :jobParams (:job_params row)
    :cronExpression (:cron_expression row) :concurrent (:concurrent row)
-   :concurrentStr (if (= 1 (long (or (:concurrent row) 0))) "允许" "禁止")
-   :status (:status row) :statusStr (if (= 1 (long (or (:status row) 0))) "正常" "暂停")
+   :concurrentStr (if (= 1 (as-int (:concurrent row))) "允许" "禁止")
+   :status (:status row) :statusStr (if (= 1 (as-int (:status row))) "正常" "暂停")
    :remark (:remark row) :createTime (some-> (:create_time row) str)})
 
 (defn list-jobs [datasource params]
   (let [[page size] (page params)
-        conditions (cond-> ["deleted = 0"]
+        conditions (cond-> ["1 = 1"]
                      (not (str/blank? (get params "jobName"))) (conj "job_name LIKE ?")
                      (not (str/blank? (get params "jobGroup"))) (conj "job_group LIKE ?")
                      (some? (get params "status")) (conj "status = ?"))
@@ -266,15 +272,15 @@
   (some-> (first-row datasource
                      "SELECT job_id, job_name, job_group, invoke_target, job_params,
                              cron_expression, concurrent, status, remark, create_time
-                        FROM sys_job WHERE job_id = ? AND deleted = 0"
+                        FROM sys_job WHERE job_id = ? AND 1 = 1"
                      [id]) job->dto))
 
 (defn add-job! [datasource body]
   (execute! datasource
             "INSERT INTO sys_job
              (job_name, job_group, invoke_target, job_params, cron_expression, concurrent,
-              status, remark, create_time, deleted)
-             VALUES (?, ?, ?, ?, ?, ?, ?, ?, NOW(), 0)"
+              status, remark, create_time)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, NOW())"
             [(required body "jobName") (required body "jobGroup") (required body "invokeTarget")
              (or (value body "jobParams") "") (required body "cronExpression")
              (or (value body "concurrent") 0) (or (value body "status") 0)
@@ -285,7 +291,7 @@
   (execute! datasource
             "UPDATE sys_job SET job_name = ?, job_group = ?, invoke_target = ?, job_params = ?,
                     cron_expression = ?, concurrent = ?, status = ?, remark = ?, update_time = NOW()
-               WHERE job_id = ? AND deleted = 0"
+               WHERE job_id = ? AND 1 = 1"
             [(required body "jobName") (required body "jobGroup") (required body "invokeTarget")
              (or (value body "jobParams") "") (required body "cronExpression")
              (or (value body "concurrent") 0) (or (value body "status") 0)
@@ -293,7 +299,7 @@
   nil)
 
 (defn update-job-status! [datasource id body]
-  (execute! datasource "UPDATE sys_job SET status = ?, update_time = NOW() WHERE job_id = ? AND deleted = 0"
+  (execute! datasource "UPDATE sys_job SET status = ?, update_time = NOW() WHERE job_id = ? AND 1 = 1"
             [(or (value body "status") 0) id])
   nil)
 
@@ -302,7 +308,7 @@
                  (map #(Long/parseLong %)) distinct vec)]
     (when (empty? ids) (throw (ex-info "jobIds is required" {:type :validation})))
     (execute! datasource
-              (str "UPDATE sys_job SET deleted = 1, update_time = NOW() WHERE job_id IN ("
+              (str "DELETE FROM sys_job WHERE job_id IN ("
                    (str/join "," (repeat (count ids) "?")) ")") ids))
   nil)
 

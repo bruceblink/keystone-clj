@@ -8,7 +8,7 @@
 - [x] Flyway migration import helper, no automatic schema mutation
 - [x] Docker/Compose, CI, uberjar build configuration
 - [x] Verify dependencies, build and tests in a networked runtime
-- [ ] Verify Docker startup in a networked runtime (container Maven proxy CA pending)
+- [x] Verify Docker startup in a networked runtime, including Maven/JVM proxy CA trust
 - [x] Snapshot all upstream API routes, fixtures and migration checksums
 - [x] RSA public key/password decryption and bcrypt login service
 - [x] Captcha, login and refresh HTTP flow

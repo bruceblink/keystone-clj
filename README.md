@@ -40,7 +40,13 @@ curl http://localhost:18080/health
 
 Compose initializes clients but DOES NOT migrate the database automatically. First import the original Keystone Flyway SQL, inspect the target database's migration history, and explicitly enable APP_MIGRATE on disposable test data.
 
-The local Docker build requires the container's Maven/JVM trust store to include any corporate or environment HTTPS proxy CA.
+When the build runs behind an HTTPS proxy, pass its CA certificate to both the
+Linux and Java trust stores:
+
+~~~bash
+PROXY_CA_B64=$(base64 -w0 /path/to/proxy-ca.crt) \
+  docker compose --env-file .env up -d --build
+~~~
 
 ## Implemented routes
 
@@ -97,7 +103,9 @@ limits; excess requests receive HTTP 429.
 | GET | /system/dict/type/:dictId | Read-only dictionary type details |
 | GET | /system/dict/data/type/:dictType | Read-only dictionary data by type |
 
-Dictionary database integration has NOT been tested yet. Unimplemented routes are listed in docs/ROADMAP.md.
+The Docker acceptance path verifies MySQL/Flyway dictionary reads and the
+fail-closed behavior of protected routes. Unimplemented routes are listed in
+docs/ROADMAP.md.
 
 ## Environment variables
 

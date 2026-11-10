@@ -22,7 +22,13 @@ services:
     volumes:
       - redis-data:/data
   app:
-    build: .
+    build:
+      context: .
+      args:
+        HTTP_PROXY: ${HTTP_PROXY:-}
+        HTTPS_PROXY: ${HTTPS_PROXY:-}
+        NO_PROXY: ${NO_PROXY:-}
+        PROXY_CA_B64: ${PROXY_CA_B64:-}
     environment:
       PORT: 18080
       APP_DB_ENABLED: "true"
