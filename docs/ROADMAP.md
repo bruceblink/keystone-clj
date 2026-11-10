@@ -9,9 +9,9 @@
 - [x] Docker/Compose, CI, uberjar build configuration
 - [x] Verify dependencies, build, tests and Docker startup in a networked runtime
 - [x] Snapshot all upstream API routes, fixtures and migration checksums
-- [ ] RSA public key/password decryption, captcha, bcrypt login
+- [x] RSA public key/password decryption and bcrypt login service
 - [x] RS256 JWT signature, issuer and expiry verification with session hook
-- [ ] Redis refresh sessions, revocation and force-login
+- [x] Redis refresh sessions, rotation, revocation and force-login service
 - [ ] RBAC, menu permissions and departmental data-scope filtering
 - [ ] User, role, menu, dept, post and dictionary CRUD
 - [ ] Exact error and timestamp compatibility

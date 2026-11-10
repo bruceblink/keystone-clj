@@ -13,7 +13,8 @@
         org.flywaydb/flyway-mysql {:mvn/version "13.12.1"}
         redis.clients/jedis {:mvn/version "7.5.2"}
         com.github.ben-manes.caffeine/caffeine {:mvn/version "3.3.1"}
-        org.slf4j/slf4j-simple {:mvn/version "2.0.17"}}
+        org.slf4j/slf4j-simple {:mvn/version "2.0.17"}
+        org.mindrot/jbcrypt {:mvn/version "0.4"}}
  :aliases {:run {:main-opts ["-m" "keystone.main"]}
            :test {:extra-paths ["test"] :main-opts ["-m" "keystone.test-runner"]}
            :dev {:extra-paths ["dev" "test"]}
