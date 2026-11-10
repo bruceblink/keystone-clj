@@ -1,0 +1,15 @@
+.cpcache/
+.clj-kondo/.cache/
+.lsp/.cache/
+.nrepl-port
+target/
+classes/
+.idea/
+.vscode/
+*.class
+*.log
+.DS_Store
+.env
+.env.*
+!.env.example
+docker/.secrets/

@@ -1,0 +1,46 @@
+services:
+  mysql:
+    image: mysql:8.4
+    environment:
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:?set MYSQL_ROOT_PASSWORD in .env}
+      MYSQL_DATABASE: keystone
+      MYSQL_USER: keystone
+      MYSQL_PASSWORD: ${DB_PASSWORD:?set DB_PASSWORD in .env}
+      TZ: UTC
+    ports:
+      - "127.0.0.1:33066:3306"
+    volumes:
+      - mysql-data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD-SHELL", "mysqladmin ping -h 127.0.0.1 -uroot -p$$MYSQL_ROOT_PASSWORD"]
+      interval: 10s
+      timeout: 5s
+      retries: 20
+  redis:
+    image: redis:8.6.2-alpine
+    command: ["redis-server","--appendonly","yes","--requirepass","${REDIS_PASSWORD:?set REDIS_PASSWORD in .env}"]
+    volumes:
+      - redis-data:/data
+  app:
+    build: .
+    environment:
+      PORT: 18080
+      APP_DB_ENABLED: "true"
+      DB_JDBC_URL: jdbc:mysql://mysql:3306/keystone?serverTimezone=UTC
+      DB_USERNAME: keystone
+      DB_PASSWORD: ${DB_PASSWORD:?set DB_PASSWORD in .env}
+      APP_REDIS_ENABLED: "true"
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      REDIS_PASSWORD: ${REDIS_PASSWORD:?set REDIS_PASSWORD in .env}
+      APP_MIGRATE: ${APP_MIGRATE:-false}
+    ports:
+      - "127.0.0.1:${PORT:-18080}:18080"
+    depends_on:
+      mysql:
+        condition: service_healthy
+      redis:
+        condition: service_started
+volumes:
+  mysql-data:
+  redis-data:

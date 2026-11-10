@@ -1,0 +1,10 @@
+.git
+.gitignore
+.github
+target
+.cpcache
+.lsp
+.env
+.env.*
+!.env.example
+**/*.log
