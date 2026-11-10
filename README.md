@@ -66,6 +66,10 @@ Compose initializes clients but DOES NOT migrate the database automatically. Fir
 | GET | /system/depts/dropdown | Department dropdown tree |
 | GET | /system/post/list | Post list, filters and pagination |
 | GET | /system/post/:postId | Post detail |
+
+The user, role, menu, department and post resources also expose the matching
+POST/PUT/DELETE management operations from the frontend contract. Write paths
+require their corresponding `system:*` permission and run in database transactions.
 | GET | /system/dict/types | Read-only, requires DB and authentication |
 | GET | /system/dict/type/list | Alias of dictionary type list |
 | GET | /system/dict/type/:dictId | Read-only dictionary type details |

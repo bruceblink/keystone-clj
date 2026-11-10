@@ -43,7 +43,7 @@
         jwt (token private claims)
         expired (token private (assoc claims "exp" 1))
         wrong-issuer (token private (assoc claims "iss" "other"))
-        tampered (str (subs jwt 0 (dec (count jwt))) "x")]
+        tampered (str jwt "x")]
     (is (nil? (security/verify-rs256 expired public "keystone" nil)))
     (is (nil? (security/verify-rs256 wrong-issuer public "keystone" nil)))
     (is (nil? (security/verify-rs256 tampered public "keystone" nil)))

@@ -38,13 +38,14 @@ Paginated data:
 - GET /system/menus, /system/menus/{menuId}, /system/menus/dropdown
 - GET /system/depts, /system/dept/{deptId}, /system/depts/dropdown
 - GET /system/post/list and /system/post/{postId}
+- POST/PUT/DELETE user, role, menu, department and post management operations
 
 The login, refresh and current-user flows have unit tests with generated RSA keys and an in-memory session store. Production login requires the configured database, Redis and RSA private key.
 The dictionary endpoints use SQL that targets original table/column names, but require integration and parity tests.
 
 ## Not implemented
 
-- User, role, menu, dept, post and dictionary write APIs
+- Dictionary write APIs
 - Config, notice, profile, logs, files, jobs and monitoring
 - User/role/menu/dept/post CRUD
 - Dictionary create/update/delete, config, notice, log, files, jobs and monitoring

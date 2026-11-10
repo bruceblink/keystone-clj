@@ -150,6 +150,32 @@
 (defn- management-dropdown [repo function-key request]
   (response/ok ((get repo function-key))))
 
+(defn- write-call [repo function-key arguments]
+  (if (and repo (fn? (get repo function-key)))
+    (do (apply (get repo function-key) arguments) (response/ok))
+    (response/unavailable)))
+
+(defn- body-write [repo function-key request]
+  (write-call repo function-key [(body-params request)]))
+
+(defn- id-body-write [repo function-key request]
+  (let [id (schema/positive-id (get-in request [:path-params :id]))]
+    (write-call repo function-key [[id (body-params request)]])))
+
+(defn- id-write [repo function-key request]
+  (let [id (schema/positive-id (get-in request [:path-params :id]))]
+    (write-call repo function-key [id])))
+
+(defn- ids-write [repo function-key request path-key]
+  (write-call repo function-key [(get-in request [:path-params path-key])]))
+
+(defn- query-ids-write [repo function-key request query-key]
+  (write-call repo function-key [(get-in request [:query-params query-key])]))
+
+(defn- id-status-write [repo function-key request]
+  (let [id (schema/positive-id (get-in request [:path-params :id]))]
+    (write-call repo function-key [[id (body-params request)]])))
+
 (defn- wrap-errors [handler]
   (fn [request]
     (try
@@ -163,6 +189,7 @@
             :invalid-token (response/fail 200 (or code 107) "token异常")
             :captcha-expired (response/fail 200 (or code 10204) "验证码过期")
             :captcha-wrong (response/fail 200 (or code 10203) "验证码错误")
+            :conflict (response/fail 200 (or code 99999) (ex-message e))
             :unavailable (response/unavailable)
             (response/fail 500 99999 "操作失败"))))
       (catch Exception _
@@ -221,6 +248,24 @@
                             (partial management-list user-repo :list-posts))
         post-detail-handler (with-repository-function user-repo :get-post
                               (partial management-detail user-repo :get-post "岗位"))
+        add-user-handler (authorize (fn [request] (body-write user-repo :add-user! request)) "system:user:add")
+        update-user-handler (authorize (fn [request] (id-body-write user-repo :update-user! request)) "system:user:edit")
+        delete-users-handler (authorize (fn [request] (ids-write user-repo :delete-users! request :id)) "system:user:remove")
+        reset-user-password-handler (authorize (fn [request] (id-body-write user-repo :reset-user-password! request)) "system:user:resetPwd")
+        change-user-status-handler (authorize (fn [request] (id-status-write user-repo :change-user-status! request)) "system:user:edit")
+        add-role-handler (authorize (fn [request] (body-write user-repo :add-role! request)) "system:role:add")
+        update-role-handler (authorize (fn [request] (body-write user-repo :update-role! request)) "system:role:edit")
+        delete-role-handler (authorize (fn [request] (id-write user-repo :delete-role! request)) "system:role:remove")
+        change-role-status-handler (authorize (fn [request] (id-status-write user-repo :change-role-status! request)) "system:role:edit")
+        add-menu-handler (authorize (fn [request] (body-write user-repo :add-menu! request)) "system:menu:add")
+        update-menu-handler (authorize (fn [request] (id-body-write user-repo :update-menu! request)) "system:menu:edit")
+        delete-menu-handler (authorize (fn [request] (id-write user-repo :delete-menu! request)) "system:menu:remove")
+        add-dept-handler (authorize (fn [request] (body-write user-repo :add-dept! request)) "system:dept:add")
+        update-dept-handler (authorize (fn [request] (id-body-write user-repo :update-dept! request)) "system:dept:edit")
+        delete-dept-handler (authorize (fn [request] (id-write user-repo :delete-dept! request)) "system:dept:remove")
+        add-post-handler (authorize (fn [request] (body-write user-repo :add-post! request)) "system:post:add")
+        update-post-handler (authorize (fn [request] (body-write user-repo :update-post! request)) "system:post:edit")
+        delete-post-handler (authorize (fn [request] (query-ids-write user-repo :delete-posts! request "ids")) "system:post:remove")
         router (ring/router
                 [["/health"
                   {:get (fn [_] (response/ok "is alive"))}]
@@ -236,29 +281,52 @@
                  ["/getRouters"
                   {:get (authorize routers-handler nil)}]
                  ["/system/users"
-                  {:get (authorize user-list-handler "system:user:list")}]
+                  {:get (authorize user-list-handler "system:user:list")
+                   :post add-user-handler}]
                  ["/system/users/:id"
-                  {:get (authorize user-detail-handler "system:user:query")}]
+                  {:get (authorize user-detail-handler "system:user:query")
+                   :put update-user-handler
+                   :delete delete-users-handler}]
+                 ["/system/users/:id/password"
+                  {:put reset-user-password-handler}]
+                 ["/system/users/:id/status"
+                  {:put change-user-status-handler}]
                  ["/system/role/list"
                   {:get (authorize role-list-handler "system:role:list")}]
                  ["/system/role/:id"
-                  {:get (authorize role-detail-handler "system:role:query")}]
+                  {:get (authorize role-detail-handler "system:role:query")
+                   :delete delete-role-handler}]
+                 ["/system/role"
+                  {:post add-role-handler
+                   :put update-role-handler}]
+                 ["/system/role/:id/status"
+                  {:put change-role-status-handler}]
                  ["/system/menus"
-                  {:get (authorize menu-management-list-handler "system:menu:list")}]
+                  {:get (authorize menu-management-list-handler "system:menu:list")
+                   :post add-menu-handler}]
                  ["/system/menus/dropdown"
                   {:get (authorize menu-dropdown-handler nil)}]
                  ["/system/menus/:id"
-                  {:get (authorize menu-detail-handler "system:menu:query")}]
+                  {:get (authorize menu-detail-handler "system:menu:query")
+                   :put update-menu-handler
+                   :delete delete-menu-handler}]
                  ["/system/depts"
-                  {:get (authorize dept-list-handler "system:dept:list")}]
+                  {:get (authorize dept-list-handler "system:dept:list")
+                   :post add-dept-handler}]
                  ["/system/depts/dropdown"
                   {:get (authorize dept-dropdown-handler nil)}]
                  ["/system/dept/:id"
-                  {:get (authorize dept-detail-handler "system:dept:query")}]
+                  {:get (authorize dept-detail-handler "system:dept:query")
+                   :put update-dept-handler
+                   :delete delete-dept-handler}]
                  ["/system/post/list"
                   {:get (authorize post-list-handler "system:post:list")}]
                  ["/system/post/:id"
                   {:get (authorize post-detail-handler "system:post:query")}]
+                 ["/system/post"
+                  {:post add-post-handler
+                   :put update-post-handler
+                   :delete delete-post-handler}]
                  ["/system/dict/types"
                   {:get (authorize dict-list "system:dict:list")}]
                  ["/system/dict/type/list"

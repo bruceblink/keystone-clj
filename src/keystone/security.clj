@@ -7,12 +7,13 @@
   (.decode (java.util.Base64/getUrlDecoder) ^String s))
 
 (defn- unsigned-claims [token]
-  (let [[header payload signature] (str/split token #"\." -1)]
-    (when (and header payload signature)
-      {:header (json/read-value (String. (b64url-decode header) "UTF-8"))
-       :claims (json/read-value (String. (b64url-decode payload) "UTF-8"))
-       :signing-input (str header "." payload)
-       :signature (b64url-decode signature)})))
+  (let [parts (str/split token #"\." -1)]
+    (when (= 3 (count parts))
+      (let [[header payload signature] parts]
+        {:header (json/read-value (String. (b64url-decode header) "UTF-8"))
+         :claims (json/read-value (String. (b64url-decode payload) "UTF-8"))
+         :signing-input (str header "." payload)
+         :signature (b64url-decode signature)}))))
 
 (defn verify-rs256
   "Return JWT claims when token is a valid RS256 token. The public-key

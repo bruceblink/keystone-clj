@@ -82,7 +82,25 @@
      :get-dept (fn [id] (when (= 1 id) {:id 1 :deptName "总部"}))
      :dept-dropdown (fn [] [{:id 1 :label "总部"}])
      :list-posts (fn [_] {:total 1 :rows [{:postId 1 :postCode "ceo"}]})
-     :get-post (fn [id] (when (= 1 id) {:postId 1 :postCode "ceo"}))}
+     :get-post (fn [id] (when (= 1 id) {:postId 1 :postCode "ceo"}))
+     :add-user! (fn [_] nil)
+     :update-user! (fn [_] nil)
+     :delete-users! (fn [_] nil)
+     :reset-user-password! (fn [_] nil)
+     :change-user-status! (fn [_] nil)
+     :add-role! (fn [_] nil)
+     :update-role! (fn [_] nil)
+     :delete-role! (fn [_] nil)
+     :change-role-status! (fn [_] nil)
+     :add-menu! (fn [_] nil)
+     :update-menu! (fn [_] nil)
+     :delete-menu! (fn [_] nil)
+     :add-dept! (fn [_] nil)
+     :update-dept! (fn [_] nil)
+     :delete-dept! (fn [_] nil)
+     :add-post! (fn [_] nil)
+     :update-post! (fn [_] nil)
+     :delete-posts! (fn [_] nil)}
     :authenticator (fn [_]
                      {:user-id 42
                       :permissions #{"*"}})}))
@@ -151,10 +169,18 @@
         role (invoke handler "/system/role/1" "test-token")
         menu-dropdown (invoke handler "/system/menus/dropdown" "test-token")
         dept (invoke handler "/system/dept/1" "test-token")
-        posts (invoke handler "/system/post/list" "test-token")]
+        posts (invoke handler "/system/post/list" "test-token")
+        add-user (invoke handler :post "/system/users" "test-token"
+                         {"username" "new-user" "password" "secret"})
+        update-role (invoke handler :put "/system/role" "test-token"
+                            {"roleId" 1 "roleName" "admin" "roleKey" "admin"})
+        delete-post (invoke handler :delete "/system/post" "test-token" nil)]
     (is (= 1 (get-in users [:json "data" "total"])))
     (is (= "admin" (get-in user [:json "data" "username"])))
     (is (= "admin" (get-in role [:json "data" "roleKey"])))
     (is (= "系统管理" (get-in menu-dropdown [:json "data" 0 "label"])))
     (is (= "总部" (get-in dept [:json "data" "deptName"])))
-    (is (= "ceo" (get-in posts [:json "data" "rows" 0 "postCode"])))) )
+    (is (= "ceo" (get-in posts [:json "data" "rows" 0 "postCode"])))
+    (is (= 0 (get-in add-user [:json "code"])))
+    (is (= 0 (get-in update-role [:json "code"])))
+    (is (= 0 (get-in delete-post [:json "code"])))) )

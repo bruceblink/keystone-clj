@@ -2,12 +2,247 @@
   (:require [clojure.string :as str]
             [jsonista.core :as json]
             [next.jdbc :as jdbc]
-            [next.jdbc.result-set :as rs]))
+            [next.jdbc.result-set :as rs])
+  (:import [org.mindrot.jbcrypt BCrypt]))
 
 (def jdbc-options {:builder-fn rs/as-unqualified-lower-maps})
 
+(declare first-row find-by-id)
+
 (defn- query [datasource sql params]
   (jdbc/execute! datasource (into [sql] params) jdbc-options))
+
+(defn- execute! [datasource sql params]
+  (jdbc/execute! datasource (into [sql] params) jdbc-options))
+
+(defn- body-value [body key]
+  (or (get body key) (get body (keyword key))))
+
+(defn- required-body [body key]
+  (let [value (body-value body key)]
+    (when (or (nil? value) (and (string? value) (str/blank? value)))
+      (throw (ex-info (str key " is required") {:type :validation})))
+    value))
+
+(defn- generated-id [tx]
+  (:id (first (execute! tx "SELECT LAST_INSERT_ID() AS id" []))))
+
+(defn- insert-role-menus! [tx role-id menu-ids]
+  (doseq [menu-id (distinct (map #(Long/parseLong (str %)) (or menu-ids [])))]
+    (execute! tx "INSERT INTO sys_role_menu (role_id, menu_id) VALUES (?, ?)"
+              [role-id menu-id])))
+
+(defn- split-ids [value]
+  (->> (str/split (str (or value "")) #",")
+       (remove str/blank?)
+       (map #(try (Long/parseLong %) (catch Exception _
+                                      (throw (ex-info "Invalid ID" {:type :validation})))))
+       distinct
+       vec))
+
+(defn add-user! [datasource body]
+  (let [username (required-body body "username")
+        nickname (or (body-value body "nickname") username)
+        password (required-body body "password")]
+    (jdbc/with-transaction [tx datasource]
+      (execute! tx
+                "INSERT INTO sys_user
+                 (post_id, role_id, dept_id, username, nickname, user_type, email,
+                  phone_number, sex, avatar, password, status, is_admin, remark,
+                  create_time, deleted)
+                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?, NOW(), 0)"
+                [(body-value body "postId") (body-value body "roleId")
+                 (body-value body "deptId") username nickname
+                 (or (body-value body "userType") 0) (or (body-value body "email") "")
+                 (or (body-value body "phoneNumber") "") (or (body-value body "sex") 2)
+                 (or (body-value body "avatar") "")
+                 (BCrypt/hashpw password (BCrypt/gensalt 10))
+                 (or (body-value body "status") 1) (or (body-value body "remark") "")]))
+    nil))
+
+(defn update-user! [datasource user-id body]
+  (let [fields [["nickname" "nickname"] ["email" "email"] ["phoneNumber" "phone_number"]
+                ["phone" "phone_number"] ["deptId" "dept_id"] ["postId" "post_id"]
+                ["roleId" "role_id"] ["sex" "sex"] ["avatar" "avatar"]
+                ["status" "status"] ["remark" "remark"]]
+        selected (keep (fn [[source column]]
+                         (when (some? (body-value body source))
+                           [column (body-value body source)])) fields)]
+    (when (empty? selected)
+      (throw (ex-info "No user fields to update" {:type :validation})))
+    (jdbc/with-transaction [tx datasource]
+      (execute! tx
+                (str "UPDATE sys_user SET "
+                     (str/join ", " (map (fn [[column _]] (str column " = ?")) selected))
+                     ", update_time = NOW() WHERE user_id = ? AND deleted = 0")
+                (conj (mapv second selected) user-id)))
+    nil))
+
+(defn reset-user-password! [datasource user-id body]
+  (let [password (required-body body "password")]
+    (execute! datasource
+              "UPDATE sys_user SET password = ?, update_time = NOW() WHERE user_id = ? AND deleted = 0"
+              [(BCrypt/hashpw password (BCrypt/gensalt 10)) user-id])
+    nil))
+
+(defn delete-users! [datasource ids]
+  (let [ids (split-ids ids)]
+    (when (empty? ids) (throw (ex-info "userIds is required" {:type :validation})))
+    (execute! datasource
+              (str "UPDATE sys_user SET deleted = 1, update_time = NOW() WHERE user_id IN ("
+                   (str/join "," (repeat (count ids) "?")) ")") ids)
+    nil))
+
+(defn change-user-status! [datasource user-id body]
+  (let [status (required-body body "status")]
+    (execute! datasource
+              "UPDATE sys_user SET status = ?, update_time = NOW() WHERE user_id = ? AND deleted = 0"
+              [status user-id])
+    nil))
+
+(defn add-role! [datasource body]
+  (jdbc/with-transaction [tx datasource]
+    (execute! tx
+              "INSERT INTO sys_role
+               (role_name, role_key, role_sort, data_scope, dept_id_set, status,
+                remark, create_time, deleted)
+               VALUES (?, ?, ?, ?, ?, ?, ?, NOW(), 0)"
+              [(required-body body "roleName") (required-body body "roleKey")
+               (or (body-value body "roleSort") 0) (or (body-value body "dataScope") 2)
+               (str/join "," (or (body-value body "selectedDeptList") []))
+               (or (body-value body "status") 1) (or (body-value body "remark") "")])
+    (insert-role-menus! tx (generated-id tx) (body-value body "menuIds")))
+  nil)
+
+(defn update-role! [datasource body]
+  (let [role-id (Long/parseLong (str (required-body body "roleId")))]
+    (jdbc/with-transaction [tx datasource]
+      (execute! tx
+                "UPDATE sys_role SET role_name = ?, role_key = ?, role_sort = ?,
+                        data_scope = ?, dept_id_set = ?, status = ?, remark = ?, update_time = NOW()
+                   WHERE role_id = ? AND deleted = 0"
+                [(required-body body "roleName") (required-body body "roleKey")
+                 (or (body-value body "roleSort") 0) (or (body-value body "dataScope") 2)
+                 (str/join "," (or (body-value body "selectedDeptList") []))
+                 (or (body-value body "status") 1) (or (body-value body "remark") "") role-id])
+      (execute! tx "DELETE FROM sys_role_menu WHERE role_id = ?" [role-id])
+      (insert-role-menus! tx role-id (body-value body "menuIds")))
+    nil))
+
+(defn delete-role! [datasource role-id]
+  (jdbc/with-transaction [tx datasource]
+    (execute! tx "UPDATE sys_role SET deleted = 1, update_time = NOW() WHERE role_id = ?" [role-id])
+    (execute! tx "DELETE FROM sys_role_menu WHERE role_id = ?" [role-id]))
+  nil)
+
+(defn change-role-status! [datasource role-id body]
+  (execute! datasource "UPDATE sys_role SET status = ?, update_time = NOW() WHERE role_id = ? AND deleted = 0"
+            [(required-body body "status") role-id])
+  nil)
+
+(defn add-menu! [datasource body]
+  (let [meta (or (body-value body "meta") {})]
+    (execute! datasource
+              "INSERT INTO sys_menu
+               (menu_name, menu_type, router_name, parent_id, path, is_button,
+                permission, meta_info, status, remark, create_time, deleted)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW(), 0)"
+              [(required-body body "menuName") (or (body-value body "menuType") 1)
+               (or (body-value body "routerName") "") (or (body-value body "parentId") 0)
+               (or (body-value body "path") "") (if (body-value body "isButton") 1 0)
+               (or (body-value body "permission") "") (json/write-value-as-string meta)
+               (or (body-value body "status") 1) (or (body-value body "remark") "")]))
+  nil)
+
+(defn update-menu! [datasource menu-id body]
+  (let [meta (or (body-value body "meta") {})]
+    (execute! datasource
+              "UPDATE sys_menu SET menu_name = ?, menu_type = ?, router_name = ?,
+                      parent_id = ?, path = ?, is_button = ?, permission = ?, meta_info = ?,
+                      status = ?, update_time = NOW()
+                 WHERE menu_id = ? AND deleted = 0"
+              [(required-body body "menuName") (or (body-value body "menuType") 1)
+               (or (body-value body "routerName") "") (or (body-value body "parentId") 0)
+               (or (body-value body "path") "") (if (body-value body "isButton") 1 0)
+               (or (body-value body "permission") "") (json/write-value-as-string meta)
+               (or (body-value body "status") 1) menu-id]))
+  nil)
+
+(defn delete-menu! [datasource menu-id]
+  (let [children (first-row datasource "SELECT COUNT(*) AS total FROM sys_menu WHERE parent_id = ? AND deleted = 0"
+                             [menu-id])
+        assigned (first-row datasource "SELECT COUNT(*) AS total FROM sys_role_menu WHERE menu_id = ?" [menu-id])]
+    (when (pos? (long (:total children)))
+      (throw (ex-info "存在子菜单不允许删除" {:type :conflict :code 10904})))
+    (when (pos? (long (:total assigned)))
+      (throw (ex-info "菜单已分配给角色，不允许" {:type :conflict :code 10905})))
+    (execute! datasource "UPDATE sys_menu SET deleted = 1, update_time = NOW() WHERE menu_id = ?" [menu-id]))
+  nil)
+
+(defn add-dept! [datasource body]
+  (execute! datasource
+            "INSERT INTO sys_dept
+             (parent_id, ancestors, dept_name, order_num, leader_name, phone, email,
+              status, create_time, deleted)
+             VALUES (?, '', ?, ?, ?, ?, ?, ?, NOW(), 0)"
+            [(or (body-value body "parentId") 0) (required-body body "deptName")
+             (or (body-value body "orderNum") 0) (or (body-value body "leaderName") "")
+             (or (body-value body "phone") "") (or (body-value body "email") "")
+             (or (body-value body "status") 1)])
+  nil)
+
+(defn update-dept! [datasource dept-id body]
+  (execute! datasource
+            "UPDATE sys_dept SET parent_id = ?, dept_name = ?, order_num = ?, leader_name = ?,
+                    phone = ?, email = ?, status = ?, update_time = NOW()
+               WHERE dept_id = ? AND deleted = 0"
+            [(or (body-value body "parentId") 0) (required-body body "deptName")
+             (or (body-value body "orderNum") 0) (or (body-value body "leaderName") "")
+             (or (body-value body "phone") "") (or (body-value body "email") "")
+             (or (body-value body "status") 1) dept-id])
+  nil)
+
+(defn delete-dept! [datasource dept-id]
+  (let [children (first-row datasource "SELECT COUNT(*) AS total FROM sys_dept WHERE parent_id = ? AND deleted = 0"
+                             [dept-id])
+        users (first-row datasource "SELECT COUNT(*) AS total FROM sys_user WHERE dept_id = ? AND deleted = 0"
+                          [dept-id])]
+    (when (pos? (long (:total children)))
+      (throw (ex-info "该部门存在下级部门不允许删除" {:type :conflict :code 10804})))
+    (when (pos? (long (:total users)))
+      (throw (ex-info "该部门存在关联的用户不允许删除" {:type :conflict :code 10805})))
+    (execute! datasource "UPDATE sys_dept SET deleted = 1, update_time = NOW() WHERE dept_id = ?" [dept-id]))
+  nil)
+
+(defn add-post! [datasource body]
+  (execute! datasource
+            "INSERT INTO sys_post (post_code, post_name, post_sort, status, remark, create_time, deleted)
+             VALUES (?, ?, ?, ?, ?, NOW(), 0)"
+            [(required-body body "postCode") (required-body body "postName")
+             (or (body-value body "postSort") 0) (or (body-value body "status") 1)
+             (or (body-value body "remark") "")])
+  nil)
+
+(defn update-post! [datasource body]
+  (execute! datasource
+            "UPDATE sys_post SET post_code = ?, post_name = ?, post_sort = ?, status = ?,
+                    remark = ?, update_time = NOW() WHERE post_id = ? AND deleted = 0"
+            [(required-body body "postCode") (required-body body "postName")
+             (or (body-value body "postSort") 0) (or (body-value body "status") 1)
+             (or (body-value body "remark") "") (Long/parseLong (str (required-body body "postId")))])
+  nil)
+
+(defn delete-posts! [datasource ids]
+  (let [ids (split-ids ids)]
+    (when (empty? ids) (throw (ex-info "ids is required" {:type :validation})))
+    (let [placeholders (str/join "," (repeat (count ids) "?"))]
+      (when (pos? (long (:total (first-row datasource
+                                           (str "SELECT COUNT(*) AS total FROM sys_user WHERE post_id IN (" placeholders ") AND deleted = 0")
+                                           ids))))
+        (throw (ex-info "职位已分配给用户，请先取消分配再删除" {:type :conflict :code 10703})))
+      (execute! datasource (str "UPDATE sys_post SET deleted = 1, update_time = NOW() WHERE post_id IN ("
+                               placeholders ")") ids)))
+  nil)
 
 (defn- first-row [datasource sql params]
   (first (query datasource sql params)))
@@ -410,4 +645,22 @@
    :get-dept #(get-dept datasource %)
    :dept-dropdown (fn [] (dept-dropdown datasource))
    :list-posts #(list-posts datasource %)
-   :get-post #(get-post datasource %)})
+   :get-post #(get-post datasource %)
+   :add-user! #(add-user! datasource %)
+   :update-user! (fn [[id body]] (update-user! datasource id body))
+   :reset-user-password! (fn [[id body]] (reset-user-password! datasource id body))
+   :delete-users! #(delete-users! datasource %)
+   :change-user-status! (fn [[id body]] (change-user-status! datasource id body))
+   :add-role! #(add-role! datasource %)
+   :update-role! #(update-role! datasource %)
+   :delete-role! #(delete-role! datasource %)
+   :change-role-status! (fn [[id body]] (change-role-status! datasource id body))
+   :add-menu! #(add-menu! datasource %)
+   :update-menu! (fn [[id body]] (update-menu! datasource id body))
+   :delete-menu! #(delete-menu! datasource %)
+   :add-dept! #(add-dept! datasource %)
+   :update-dept! (fn [[id body]] (update-dept! datasource id body))
+   :delete-dept! #(delete-dept! datasource %)
+   :add-post! #(add-post! datasource %)
+   :update-post! #(update-post! datasource %)
+   :delete-posts! #(delete-posts! datasource %)})

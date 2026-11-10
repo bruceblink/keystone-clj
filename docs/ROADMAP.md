@@ -16,7 +16,8 @@
 - [x] JWT RBAC permissions and database-backed dynamic router lookup
 - [ ] Departmental data-scope filtering
 - [x] User, role, menu, dept and post read APIs
-- [ ] User, role, menu, dept, post and dictionary write APIs
+- [x] User, role, menu, dept and post write APIs
+- [ ] Dictionary write APIs
 - [ ] Exact error and timestamp compatibility
 
 ## P1: management
