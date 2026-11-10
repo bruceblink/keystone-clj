@@ -35,7 +35,8 @@
         claims (valid-claims)
         verified (security/verify-rs256 (token private claims) public "keystone"
                                         (fn [_] true))]
-    (is (= claims verified))))
+    (is (= claims verified))
+    (is (= claims (security/verify-rs256 (token private claims) public "keystone")))))
 
 (deftest rejects-invalid-expiry-issuer-signature-and-session
   (let [{:keys [private public]} (key-pair)

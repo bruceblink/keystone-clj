@@ -20,6 +20,7 @@
    argument is a java.security.PublicKey. Optional issuer and session-valid?
    enforce the server-side session boundary."
   ([token public-key] (verify-rs256 token public-key nil nil))
+  ([token public-key issuer] (verify-rs256 token public-key issuer nil))
   ([token public-key issuer session-valid?]
    (try
      (let [{:keys [header claims signing-input signature]} (unsigned-claims token)
