@@ -1,14 +1,17 @@
 (ns keystone.http
   (:require [clojure.string :as str]
+            [clojure.java.io :as io]
             [jsonista.core :as json]
             [keystone.admin.repository :as admin]
             [keystone.auth :as auth]
             [keystone.dict.repository :as repository]
             [keystone.dict.schema :as schema]
+            [keystone.files :as files]
             [keystone.response :as response]
             [keystone.security :as security]
             [keystone.user.repository :as users]
             [reitit.ring :as ring]
+            [ring.middleware.multipart-params :as multipart]
             [ring.middleware.params :as params]))
 
 (defn- body-params [request]
@@ -253,6 +256,30 @@
                                :osArch (System/getProperty "os.arch")
                                :userDir (System/getProperty "user.dir")}})))
 
+(defn- multipart-part [request names]
+  (some #(get-in request [:multipart-params %]) names))
+
+(defn- upload-handler [request]
+  (if-let [part (multipart-part request ["file" :file])]
+    (response/ok (files/upload! part))
+    (response/validation-error "file")))
+
+(defn- download-handler [request]
+  (let [file (files/download (get-in request [:query-params "fileName"]))]
+    {:status 200
+     :headers {"content-type" "application/octet-stream"
+               "content-disposition" (str "attachment; filename=\"" (.getName file) "\"")}
+     :body (io/input-stream file)}))
+
+(defn- avatar-upload-handler [user-repo request]
+  (if-let [part (multipart-part request ["avatarfile" "file" :avatarfile :file])]
+    (let [uploaded (files/upload! part)
+          user-id (get-in request [:principal :user-id])]
+      (when (and user-repo (fn? (:update-avatar! user-repo)))
+        ((:update-avatar! user-repo) [user-id (:url uploaded)]))
+      (response/ok {:imgUrl (:url uploaded)}))
+    (response/validation-error "avatarfile")))
+
 (defn- wrap-errors [handler]
   (fn [request]
     (try
@@ -333,7 +360,9 @@
                                             (principal-body-write user-repo :update-profile! request)) nil)
         update-profile-password-handler (authorize (fn [request]
                                                      (principal-body-write user-repo :update-profile-password! request)) nil)
-        avatar-handler (authorize (fn [_] (response/unavailable)) nil)
+        avatar-handler (authorize (fn [request] (avatar-upload-handler user-repo request)) nil)
+        file-upload-handler (authorize upload-handler nil)
+        file-download-handler (fn [request] (download-handler request))
         online-users-handler (authorize (fn [request] (online-users auth request)) "monitor:online:list")
         force-online-logout-handler (authorize (fn [request] (force-online-logout auth request)) "monitor:online:forceLogout")
         cache-info-handler (authorize (fn [_] (cache-info cache)) "monitor:cache:list")
@@ -468,10 +497,15 @@
                    :delete delete-post-handler}]
                  ["/system/user/profile"
                   {:get profile-handler
-                   :put update-profile-handler
-                   :post avatar-handler}]
+                   :put update-profile-handler}]
                  ["/system/user/profile/password"
                   {:put update-profile-password-handler}]
+                 ["/system/user/profile/avatar"
+                  {:post avatar-handler}]
+                 ["/file/upload"
+                  {:post file-upload-handler}]
+                 ["/file/download"
+                  {:get file-download-handler}]
                  ["/system/configs"
                   {:get (authorize config-list-handler "system:config:list")
                    :delete refresh-config-handler}]
@@ -543,5 +577,6 @@
                   :not-acceptable (fn [_] (response/fail 406 10002 "不支持的操作"))})]
     (-> (ring/ring-handler router default)
         params/wrap-params
+        multipart/wrap-multipart-params
         wrap-json-body
         wrap-errors)))

@@ -502,6 +502,12 @@
               [(BCrypt/hashpw new-password (BCrypt/gensalt 10)) user-id]))
   nil)
 
+(defn update-avatar! [datasource user-id avatar]
+  (execute! datasource
+            "UPDATE sys_user SET avatar = ?, update_time = NOW() WHERE user_id = ? AND deleted = 0"
+            [avatar user-id])
+  nil)
+
 (defn- role-row->dto [row selected-menu-ids]
   {:roleId (:role_id row)
    :roleName (:role_name row)
@@ -708,6 +714,7 @@
    :get-profile #(get-profile datasource %)
    :update-profile! (fn [[id body]] (update-profile! datasource id body))
    :update-profile-password! (fn [[id body]] (update-profile-password! datasource id body))
+   :update-avatar! (fn [[id avatar]] (update-avatar! datasource id avatar))
    :add-user! #(add-user! datasource %)
    :update-user! (fn [[id body]] (update-user! datasource id body))
    :reset-user-password! (fn [[id body]] (reset-user-password! datasource id body))

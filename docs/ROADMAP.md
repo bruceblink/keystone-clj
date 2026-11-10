@@ -23,10 +23,10 @@
 ## P1: management
 - [x] Config and notice list/detail/create/update/delete APIs
 - [x] Profile read/update/password APIs
-- [ ] Avatar upload
+- [x] Avatar and general local file upload/download APIs
 - [x] Online users, forced logout and server/cache monitor summaries
 - [x] Login and operation log query/delete APIs
-- [ ] Import/export and file API
+- [ ] Import/export spreadsheet APIs
 - [ ] Cache consistency and invalidation
 - [ ] Frontend E2E parity
 
