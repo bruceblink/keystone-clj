@@ -2,7 +2,14 @@
 
 Clojure-native rewrite of [bruceblink/Keystone](https://github.com/bruceblink/Keystone), focused on HTTP API and business behavior compatibility, without preserving Spring Boot internals or Starter support.
 
-**Status: initial skeleton; NOT production-ready.**
+> **Archived project — learning and reference only.** Development and routine
+> maintenance are paused. No new features, bug fixes, security updates, or
+> production support are planned for this repository.
+
+This repository is kept as a snapshot for studying a Clojure rewrite of the
+Keystone HTTP API and its supporting infrastructure. Treat all dependencies,
+configuration examples, and implementation choices as historical and review
+them before using any code elsewhere.
 
 ## Technology
 
@@ -11,7 +18,7 @@ Clojure-native rewrite of [bruceblink/Keystone](https://github.com/bruceblink/Ke
 - Flyway, Redis (Jedis), Caffeine
 - tools.deps, tools.build, Docker Compose, GitHub Actions
 
-## Local development
+## Learning setup
 
 Requirements: Java 21+ and Clojure CLI. JDK 25 is recommended.
 
@@ -103,9 +110,10 @@ limits; excess requests receive HTTP 429.
 | GET | /system/dict/type/:dictId | Read-only dictionary type details |
 | GET | /system/dict/data/type/:dictType | Read-only dictionary data by type |
 
-The Docker acceptance path verifies MySQL/Flyway dictionary reads and the
+The archived snapshot was verified with MySQL/Flyway dictionary reads and the
 fail-closed behavior of protected routes. Unimplemented routes are listed in
-docs/ROADMAP.md.
+docs/ROADMAP.md for historical context; the roadmap is no longer an active
+delivery plan.
 
 ## Environment variables
 
