@@ -1,6 +1,7 @@
 (ns keystone.http
   (:require [clojure.string :as str]
             [jsonista.core :as json]
+            [keystone.admin.repository :as admin]
             [keystone.auth :as auth]
             [keystone.dict.repository :as repository]
             [keystone.dict.schema :as schema]
@@ -20,14 +21,17 @@
 (defn- wrap-json-body [handler]
   (fn [request]
     (if (and (:body request) (json-content? request))
-      (try
-        (let [raw (if (string? (:body request))
+      (let [raw (try
+                  (if (string? (:body request))
                     (:body request)
-                    (slurp (:body request)))]
+                    (slurp (:body request)))
+                  (catch Exception e
+                    (throw (ex-info "请求体不是有效 JSON" {:type :validation} e))))]
+        (try
           (handler (assoc request :body-params
-                          (if (str/blank? raw) {} (json/read-value raw)))))
-        (catch Exception e
-          (throw (ex-info "请求体不是有效 JSON" {:type :validation} e))))
+                          (if (str/blank? raw) {} (json/read-value raw))))
+          (catch com.fasterxml.jackson.core.JsonProcessingException e
+            (throw (ex-info "请求体不是有效 JSON" {:type :validation} e)))))
       (handler request))))
 
 (defn- with-repository [repo handler]
@@ -206,13 +210,16 @@
 (defn make-handler
   "Inject a real authenticator only after RS256, expiry, and session
    revocation verification exist. nil is fail-closed."
-  [{:keys [db cache authenticator dict-repository user-repository auth]}]
+  [{:keys [db cache authenticator dict-repository user-repository admin-repository auth]}]
   (let [repo (or dict-repository
                  (when-let [datasource (:datasource db)]
                    (repository/make-repository datasource cache)))
         user-repo (or user-repository (:repository auth)
                       (when-let [datasource (:datasource db)]
                         (users/make-repository datasource)))
+        admin-repo (or admin-repository
+                       (when-let [datasource (:datasource db)]
+                         (admin/make-repository datasource)))
         effective-authenticator (or authenticator (:authenticate (:service auth)))
         authorize (fn [handler permission]
                     (security/wrap-protected handler effective-authenticator permission))
@@ -274,6 +281,24 @@
         add-post-handler (authorize (fn [request] (body-write user-repo :add-post! request)) "system:post:add")
         update-post-handler (authorize (fn [request] (body-write user-repo :update-post! request)) "system:post:edit")
         delete-post-handler (authorize (fn [request] (query-ids-write user-repo :delete-posts! request "ids")) "system:post:remove")
+        config-list-handler (with-repository-function admin-repo :list-configs
+                              (partial management-list admin-repo :list-configs))
+        config-detail-handler (with-repository-function admin-repo :get-config
+                                (partial management-detail admin-repo :get-config "配置"))
+        add-config-handler (authorize (fn [request] (body-write admin-repo :add-config! request)) "system:config:add")
+        update-config-handler (authorize (fn [request] (path-id-body-write admin-repo :update-config! request :id)) "system:config:edit")
+        refresh-config-handler (authorize (fn [_] (write-call admin-repo :delete-config-cache! [])) "system:config:edit")
+        notice-list-handler (with-repository-function admin-repo :list-notices
+                              (partial management-list admin-repo :list-notices))
+        notice-detail-handler (with-repository-function admin-repo :get-notice
+                                (partial management-detail admin-repo :get-notice "公告"))
+        add-notice-handler (authorize (fn [request]
+                                        (write-call admin-repo :add-notice!
+                                                    [(body-params request)
+                                                     (get-in request [:principal :user-id])]))
+                                      "system:notice:add")
+        update-notice-handler (authorize (fn [request] (path-id-body-write admin-repo :update-notice! request :id)) "system:notice:edit")
+        delete-notice-handler (authorize (fn [request] (query-ids-write admin-repo :delete-notices! request "noticeIds")) "system:notice:remove")
         dict-data-list-handler (with-repository-function repo :list-data
                                  (partial management-list repo :list-data))
         dict-data-detail-handler (with-repository-function repo :get-data
@@ -345,6 +370,21 @@
                   {:post add-post-handler
                    :put update-post-handler
                    :delete delete-post-handler}]
+                 ["/system/configs"
+                  {:get (authorize config-list-handler "system:config:list")
+                   :delete refresh-config-handler}]
+                 ["/system/config/:id"
+                  {:get (authorize config-detail-handler "system:config:query")
+                   :put update-config-handler}]
+                 ["/system/config"
+                  {:post add-config-handler}]
+                 ["/system/notices"
+                  {:get (authorize notice-list-handler "system:notice:list")
+                   :post add-notice-handler
+                   :delete delete-notice-handler}]
+                 ["/system/notices/:id"
+                  {:get (authorize notice-detail-handler "system:notice:query")
+                   :put update-notice-handler}]
                  ["/system/dict/types"
                   {:get (authorize dict-list "system:dict:list")}]
                  ["/system/dict/type/list"

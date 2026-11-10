@@ -72,6 +72,8 @@ POST/PUT/DELETE management operations from the frontend contract. Write paths
 require their corresponding `system:*` permission and run in database transactions.
 Dictionary type and data create/update/delete endpoints are also available and
 invalidate the Caffeine dictionary cache after writes.
+System configuration and notice list/detail/create/update/delete endpoints are
+available under `/system/config*` and `/system/notices*`.
 | GET | /system/dict/types | Read-only, requires DB and authentication |
 | GET | /system/dict/type/list | Alias of dictionary type list |
 | GET | /system/dict/type/:dictId | Read-only dictionary type details |

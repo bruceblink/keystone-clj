@@ -78,6 +78,17 @@
 (defn make-management-handler []
   (http/make-handler
    {:dict-repository sample-repo
+    :admin-repository
+    {:list-configs (fn [_] {:total 1 :rows [{:configId 1 :configKey "sys.test"}]})
+     :get-config (fn [id] (when (= 1 id) {:configId 1 :configKey "sys.test"}))
+     :add-config! (fn [_] nil)
+     :update-config! (fn [_] nil)
+     :delete-config-cache! (fn [] nil)
+     :list-notices (fn [_] {:total 1 :rows [{:noticeId 1 :noticeTitle "公告"}]})
+     :get-notice (fn [id] (when (= 1 id) {:noticeId 1 :noticeTitle "公告"}))
+     :add-notice! (fn [_ _] nil)
+     :update-notice! (fn [_] nil)
+     :delete-notices! (fn [_] nil)}
     :user-repository
     {:list-users (fn [_] {:total 1 :rows [{:userId 42 :username "admin"}]})
      :get-user-detail (fn [id] (when (= 42 id) {:userId 42 :username "admin"}))
@@ -188,7 +199,11 @@
                          {"dictName" "状态" "dictType" "status"})
         update-dict (invoke handler :put "/system/dict/type/1" "test-token"
                             {"dictName" "状态" "dictType" "status"})
-        delete-data (invoke handler :delete "/system/dict/data/1" "test-token" nil)]
+        delete-data (invoke handler :delete "/system/dict/data/1" "test-token" nil)
+        configs (invoke handler "/system/configs" "test-token")
+        notices (invoke handler "/system/notices" "test-token")
+        add-notice (invoke handler :post "/system/notices" "test-token"
+                           {"noticeTitle" "公告" "noticeType" 1 "status" 1})]
     (is (= 1 (get-in users [:json "data" "total"])))
     (is (= "admin" (get-in user [:json "data" "username"])))
     (is (= "admin" (get-in role [:json "data" "roleKey"])))
@@ -201,4 +216,7 @@
     (is (= 1 (get-in dict-list [:json "data" "total"])))
     (is (= 0 (get-in add-dict [:json "code"])))
     (is (= 0 (get-in update-dict [:json "code"])))
-    (is (= 0 (get-in delete-data [:json "code"])))) )
+    (is (= 0 (get-in delete-data [:json "code"])))
+    (is (= 1 (get-in configs [:json "data" "total"])))
+    (is (= "公告" (get-in notices [:json "data" "rows" 0 "noticeTitle"])))
+    (is (= 0 (get-in add-notice [:json "code"])))) )

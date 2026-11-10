@@ -21,7 +21,8 @@
 - [ ] Exact error and timestamp compatibility
 
 ## P1: management
-- [ ] Config, notice, profile, logs and online users
+- [x] Config and notice list/detail/create/update/delete APIs
+- [ ] Profile, logs and online users
 - [ ] Import/export and file API
 - [ ] Cache consistency and invalidation
 - [ ] Frontend E2E parity
