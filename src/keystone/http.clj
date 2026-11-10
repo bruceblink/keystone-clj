@@ -162,8 +162,16 @@
   (let [id (schema/positive-id (get-in request [:path-params :id]))]
     (write-call repo function-key [[id (body-params request)]])))
 
+(defn- path-id-body-write [repo function-key request path-key]
+  (let [id (schema/positive-id (get-in request [:path-params path-key]))]
+    (write-call repo function-key [[id (body-params request)]])))
+
 (defn- id-write [repo function-key request]
   (let [id (schema/positive-id (get-in request [:path-params :id]))]
+    (write-call repo function-key [id])))
+
+(defn- path-id-write [repo function-key request path-key]
+  (let [id (schema/positive-id (get-in request [:path-params path-key]))]
     (write-call repo function-key [id])))
 
 (defn- ids-write [repo function-key request path-key]
@@ -266,6 +274,16 @@
         add-post-handler (authorize (fn [request] (body-write user-repo :add-post! request)) "system:post:add")
         update-post-handler (authorize (fn [request] (body-write user-repo :update-post! request)) "system:post:edit")
         delete-post-handler (authorize (fn [request] (query-ids-write user-repo :delete-posts! request "ids")) "system:post:remove")
+        dict-data-list-handler (with-repository-function repo :list-data
+                                 (partial management-list repo :list-data))
+        dict-data-detail-handler (with-repository-function repo :get-data
+                                   (partial management-detail repo :get-data "字典数据"))
+        add-dict-type-handler (authorize (fn [request] (body-write repo :add-type! request)) "system:dict:add")
+        update-dict-type-handler (authorize (fn [request] (path-id-body-write repo :update-type! request :dictId)) "system:dict:edit")
+        delete-dict-type-handler (authorize (fn [request] (path-id-write repo :delete-type! request :dictId)) "system:dict:remove")
+        add-dict-data-handler (authorize (fn [request] (body-write repo :add-data! request)) "system:dict:add")
+        update-dict-data-handler (authorize (fn [request] (path-id-body-write repo :update-data! request :dictCode)) "system:dict:edit")
+        delete-dict-data-handler (authorize (fn [request] (path-id-write repo :delete-data! request :dictCode)) "system:dict:remove")
         router (ring/router
                 [["/health"
                   {:get (fn [_] (response/ok "is alive"))}]
@@ -332,7 +350,19 @@
                  ["/system/dict/type/list"
                   {:get (authorize dict-list "system:dict:list")}]
                  ["/system/dict/type/:dictId"
-                  {:get (authorize dict-one "system:dict:query")}]
+                  {:get (authorize dict-one "system:dict:query")
+                   :put update-dict-type-handler
+                   :delete delete-dict-type-handler}]
+                 ["/system/dict/type"
+                  {:post add-dict-type-handler}]
+                 ["/system/dict/data/list"
+                  {:get (authorize dict-data-list-handler "system:dict:list")}]
+                 ["/system/dict/data/:dictCode"
+                  {:get (authorize dict-data-detail-handler "system:dict:query")
+                   :put update-dict-data-handler
+                   :delete delete-dict-data-handler}]
+                 ["/system/dict/data"
+                  {:post add-dict-data-handler}]
                  ["/system/dict/data/type/:dictType"
                   {:get (authorize dict-data nil)}]]
                 {:conflicts nil})

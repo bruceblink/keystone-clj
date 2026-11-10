@@ -29,7 +29,15 @@
                   :rows [{:dictId 1 :dictName "状态" :dictType "status" :status 1}]
                   :query [pageNum pageSize]})
    :get-type (fn [id] (when (= 1 id) {:dictId 1 :dictType "status"}))
-   :list-data-by-type (fn [_] [])})
+   :list-data-by-type (fn [_] [])
+   :list-data (fn [_] {:total 1 :rows [{:dictCode 1 :dictType "status"}]})
+   :get-data (fn [id] (when (= 1 id) {:dictCode 1 :dictType "status"}))
+   :add-type! (fn [_] nil)
+   :update-type! (fn [_] nil)
+   :delete-type! (fn [_] nil)
+   :add-data! (fn [_] nil)
+   :update-data! (fn [_] nil)
+   :delete-data! (fn [_] nil)})
 
 (defn make-auth-handler [permissions]
   (http/make-handler
@@ -174,7 +182,13 @@
                          {"username" "new-user" "password" "secret"})
         update-role (invoke handler :put "/system/role" "test-token"
                             {"roleId" 1 "roleName" "admin" "roleKey" "admin"})
-        delete-post (invoke handler :delete "/system/post" "test-token" nil)]
+        delete-post (invoke handler :delete "/system/post" "test-token" nil)
+        dict-list (invoke handler "/system/dict/data/list" "test-token")
+        add-dict (invoke handler :post "/system/dict/type" "test-token"
+                         {"dictName" "状态" "dictType" "status"})
+        update-dict (invoke handler :put "/system/dict/type/1" "test-token"
+                            {"dictName" "状态" "dictType" "status"})
+        delete-data (invoke handler :delete "/system/dict/data/1" "test-token" nil)]
     (is (= 1 (get-in users [:json "data" "total"])))
     (is (= "admin" (get-in user [:json "data" "username"])))
     (is (= "admin" (get-in role [:json "data" "roleKey"])))
@@ -183,4 +197,8 @@
     (is (= "ceo" (get-in posts [:json "data" "rows" 0 "postCode"])))
     (is (= 0 (get-in add-user [:json "code"])))
     (is (= 0 (get-in update-role [:json "code"])))
-    (is (= 0 (get-in delete-post [:json "code"])))) )
+    (is (= 0 (get-in delete-post [:json "code"])))
+    (is (= 1 (get-in dict-list [:json "data" "total"])))
+    (is (= 0 (get-in add-dict [:json "code"])))
+    (is (= 0 (get-in update-dict [:json "code"])))
+    (is (= 0 (get-in delete-data [:json "code"])))) )

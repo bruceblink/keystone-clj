@@ -70,6 +70,8 @@ Compose initializes clients but DOES NOT migrate the database automatically. Fir
 The user, role, menu, department and post resources also expose the matching
 POST/PUT/DELETE management operations from the frontend contract. Write paths
 require their corresponding `system:*` permission and run in database transactions.
+Dictionary type and data create/update/delete endpoints are also available and
+invalidate the Caffeine dictionary cache after writes.
 | GET | /system/dict/types | Read-only, requires DB and authentication |
 | GET | /system/dict/type/list | Alias of dictionary type list |
 | GET | /system/dict/type/:dictId | Read-only dictionary type details |

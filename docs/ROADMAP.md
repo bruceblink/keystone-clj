@@ -17,7 +17,7 @@
 - [ ] Departmental data-scope filtering
 - [x] User, role, menu, dept and post read APIs
 - [x] User, role, menu, dept and post write APIs
-- [ ] Dictionary write APIs
+- [x] Dictionary type/data write APIs and cache invalidation
 - [ ] Exact error and timestamp compatibility
 
 ## P1: management
