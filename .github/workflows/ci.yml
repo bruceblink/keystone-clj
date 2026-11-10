@@ -27,3 +27,16 @@ jobs:
         run: clojure -T:build uber
       - name: Verify uberjar exists
         run: test -s target/keystone-clj.jar
+      - name: Smoke test executable HTTP server
+        run: |
+          java -jar target/keystone-clj.jar > /tmp/keystone-clj.log 2>&1 &
+          SERVER_PID=$!
+          trap 'kill "$SERVER_PID" 2>/dev/null || true' EXIT
+          for i in $(seq 1 30); do
+            if curl --silent --show-error --fail http://127.0.0.1:18080/health 2>/dev/null | grep -q '"data":"is alive"'; then
+              exit 0
+            fi
+            sleep 1
+          done
+          cat /tmp/keystone-clj.log
+          exit 1
