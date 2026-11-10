@@ -67,6 +67,26 @@
         :user-repository user-repository
         :auth {:service service :key-pair pair :captcha-enabled? false}}))))
 
+(defn make-management-handler []
+  (http/make-handler
+   {:dict-repository sample-repo
+    :user-repository
+    {:list-users (fn [_] {:total 1 :rows [{:userId 42 :username "admin"}]})
+     :get-user-detail (fn [id] (when (= 42 id) {:userId 42 :username "admin"}))
+     :list-roles (fn [_] {:total 1 :rows [{:roleId 1 :roleKey "admin"}]})
+     :get-role (fn [id] (when (= 1 id) {:roleId 1 :roleKey "admin"}))
+     :list-menu-management (fn [_] [{:id 1 :menuName "系统管理"}])
+     :get-menu (fn [id] (when (= 1 id) {:id 1 :menuName "系统管理"}))
+     :menu-dropdown (fn [] [{:id 1 :label "系统管理"}])
+     :list-depts (fn [_] [{:id 1 :deptName "总部"}])
+     :get-dept (fn [id] (when (= 1 id) {:id 1 :deptName "总部"}))
+     :dept-dropdown (fn [] [{:id 1 :label "总部"}])
+     :list-posts (fn [_] {:total 1 :rows [{:postId 1 :postCode "ceo"}]})
+     :get-post (fn [id] (when (= 1 id) {:postId 1 :postCode "ceo"}))}
+    :authenticator (fn [_]
+                     {:user-id 42
+                      :permissions #{"*"}})}))
+
 (deftest health-contract
   (let [res (invoke (http/make-handler {}) "/health")]
     (is (= 200 (:status res)))
@@ -123,3 +143,18 @@
     (is (string? token))
     (is (= "admin" (get-in user-res [:json "data" "userInfo" "username"])))
     (is (= 0 (get-in refresh-res [:json "code"])))) )
+
+(deftest management-read-routes-contract
+  (let [handler (make-management-handler)
+        users (invoke handler "/system/users" "test-token")
+        user (invoke handler "/system/users/42" "test-token")
+        role (invoke handler "/system/role/1" "test-token")
+        menu-dropdown (invoke handler "/system/menus/dropdown" "test-token")
+        dept (invoke handler "/system/dept/1" "test-token")
+        posts (invoke handler "/system/post/list" "test-token")]
+    (is (= 1 (get-in users [:json "data" "total"])))
+    (is (= "admin" (get-in user [:json "data" "username"])))
+    (is (= "admin" (get-in role [:json "data" "roleKey"])))
+    (is (= "系统管理" (get-in menu-dropdown [:json "data" 0 "label"])))
+    (is (= "总部" (get-in dept [:json "data" "deptName"])))
+    (is (= "ceo" (get-in posts [:json "data" "rows" 0 "postCode"])))) )

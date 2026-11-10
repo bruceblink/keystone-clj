@@ -54,6 +54,18 @@ Compose initializes clients but DOES NOT migrate the database automatically. Fir
 | POST | /logout | Authenticated access-token logout |
 | GET | /getLoginUserInfo | Authenticated user and permissions |
 | GET | /getRouters | Authenticated database-backed menu tree |
+| GET | /system/users | User list, filters and pagination |
+| GET | /system/users/:userId | User detail |
+| GET | /system/role/list | Role list, filters and pagination |
+| GET | /system/role/:roleId | Role detail |
+| GET | /system/menus | Menu list |
+| GET | /system/menus/:menuId | Menu detail |
+| GET | /system/menus/dropdown | Menu dropdown tree |
+| GET | /system/depts | Department list |
+| GET | /system/dept/:deptId | Department detail |
+| GET | /system/depts/dropdown | Department dropdown tree |
+| GET | /system/post/list | Post list, filters and pagination |
+| GET | /system/post/:postId | Post detail |
 | GET | /system/dict/types | Read-only, requires DB and authentication |
 | GET | /system/dict/type/list | Alias of dictionary type list |
 | GET | /system/dict/type/:dictId | Read-only dictionary type details |

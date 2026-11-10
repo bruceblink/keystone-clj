@@ -15,7 +15,8 @@
 - [x] Redis refresh sessions, rotation, revocation and force-login service
 - [x] JWT RBAC permissions and database-backed dynamic router lookup
 - [ ] Departmental data-scope filtering
-- [ ] User, role, menu, dept, post and dictionary CRUD
+- [x] User, role, menu, dept and post read APIs
+- [ ] User, role, menu, dept, post and dictionary write APIs
 - [ ] Exact error and timestamp compatibility
 
 ## P1: management

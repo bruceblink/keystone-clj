@@ -132,6 +132,24 @@
     (response/ok ((:menu-tree repo) user))
     (response/not-found "用户" (get-in request [:principal :user-id]))))
 
+(defn- with-repository-function [repo function-key handler]
+  (fn [request]
+    (if (and repo (fn? (get repo function-key)))
+      (handler request)
+      (response/unavailable))))
+
+(defn- management-list [repo function-key request]
+  (response/ok ((get repo function-key) (:query-params request))))
+
+(defn- management-detail [repo function-key entity request]
+  (let [id (schema/positive-id (get-in request [:path-params :id]))]
+    (if-let [data ((get repo function-key) id)]
+      (response/ok data)
+      (response/not-found entity id))))
+
+(defn- management-dropdown [repo function-key request]
+  (response/ok ((get repo function-key))))
+
 (defn- wrap-errors [handler]
   (fn [request]
     (try
@@ -179,6 +197,30 @@
                           (response/ok)) nil)
         user-info-handler (with-repository user-repo (partial current-user user-repo))
         routers-handler (with-repository user-repo (partial routers user-repo))
+        user-list-handler (with-repository-function user-repo :list-users
+                            (partial management-list user-repo :list-users))
+        user-detail-handler (with-repository-function user-repo :get-user-detail
+                              (partial management-detail user-repo :get-user-detail "用户"))
+        role-list-handler (with-repository-function user-repo :list-roles
+                            (partial management-list user-repo :list-roles))
+        role-detail-handler (with-repository-function user-repo :get-role
+                              (partial management-detail user-repo :get-role "角色"))
+        menu-management-list-handler (with-repository-function user-repo :list-menu-management
+                                       (partial management-list user-repo :list-menu-management))
+        menu-detail-handler (with-repository-function user-repo :get-menu
+                              (partial management-detail user-repo :get-menu "菜单"))
+        menu-dropdown-handler (with-repository-function user-repo :menu-dropdown
+                               (partial management-dropdown user-repo :menu-dropdown))
+        dept-list-handler (with-repository-function user-repo :list-depts
+                            (partial management-list user-repo :list-depts))
+        dept-detail-handler (with-repository-function user-repo :get-dept
+                              (partial management-detail user-repo :get-dept "部门"))
+        dept-dropdown-handler (with-repository-function user-repo :dept-dropdown
+                                (partial management-dropdown user-repo :dept-dropdown))
+        post-list-handler (with-repository-function user-repo :list-posts
+                            (partial management-list user-repo :list-posts))
+        post-detail-handler (with-repository-function user-repo :get-post
+                              (partial management-detail user-repo :get-post "岗位"))
         router (ring/router
                 [["/health"
                   {:get (fn [_] (response/ok "is alive"))}]
@@ -193,6 +235,30 @@
                   {:get (authorize user-info-handler nil)}]
                  ["/getRouters"
                   {:get (authorize routers-handler nil)}]
+                 ["/system/users"
+                  {:get (authorize user-list-handler "system:user:list")}]
+                 ["/system/users/:id"
+                  {:get (authorize user-detail-handler "system:user:query")}]
+                 ["/system/role/list"
+                  {:get (authorize role-list-handler "system:role:list")}]
+                 ["/system/role/:id"
+                  {:get (authorize role-detail-handler "system:role:query")}]
+                 ["/system/menus"
+                  {:get (authorize menu-management-list-handler "system:menu:list")}]
+                 ["/system/menus/dropdown"
+                  {:get (authorize menu-dropdown-handler nil)}]
+                 ["/system/menus/:id"
+                  {:get (authorize menu-detail-handler "system:menu:query")}]
+                 ["/system/depts"
+                  {:get (authorize dept-list-handler "system:dept:list")}]
+                 ["/system/depts/dropdown"
+                  {:get (authorize dept-dropdown-handler nil)}]
+                 ["/system/dept/:id"
+                  {:get (authorize dept-detail-handler "system:dept:query")}]
+                 ["/system/post/list"
+                  {:get (authorize post-list-handler "system:post:list")}]
+                 ["/system/post/:id"
+                  {:get (authorize post-detail-handler "system:post:query")}]
                  ["/system/dict/types"
                   {:get (authorize dict-list "system:dict:list")}]
                  ["/system/dict/type/list"
