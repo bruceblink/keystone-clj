@@ -197,6 +197,60 @@
   (write-call repo function-key [[(get-in request [:principal :user-id])
                                   (body-params request)]]))
 
+(defn- online-users [auth-state request]
+  (if-let [store (get-in auth-state [:service :session-store])]
+    (let [params (:query-params request)
+          rows (->> ((:list store))
+                    (filter (fn [session]
+                              (and (or (str/blank? (get params "username"))
+                                       (= (get params "username") (:username session)))
+                                   (or (str/blank? (get params "ipAddress"))
+                                       (= (get params "ipAddress") "")))))
+                    (mapv (fn [session]
+                            {:tokenId (:access-jti session)
+                             :username (:username session)
+                             :ipAddress ""
+                             :loginLocation ""
+                             :loginTime (:issued-at session)
+                             :browser ""
+                             :operationSystem ""
+                             :deptName (get-in session [:user :deptName])})))]
+      (response/ok {:total (count rows) :rows rows}))
+    (response/unavailable)))
+
+(defn- force-online-logout [auth-state request]
+  (if-let [store (get-in auth-state [:service :session-store])]
+    (do
+      (when-let [token-id (get-in request [:path-params :tokenId])]
+        (when-let [delete (:delete-by-access! store)]
+          (delete token-id)))
+      (response/ok))
+    (response/unavailable)))
+
+(defn- cache-info [cache]
+  (if cache
+    (response/ok {:cacheName "caffeine"
+                  :size (.estimatedSize ^com.github.benmanes.caffeine.cache.Cache cache)})
+    (response/unavailable)))
+
+(defn- server-info []
+  (let [runtime (Runtime/getRuntime)
+        max-memory (.maxMemory runtime)
+        total-memory (.totalMemory runtime)
+        free-memory (.freeMemory runtime)]
+    (response/ok {:jvmInfo {:name (System/getProperty "java.vm.name")
+                            :version (System/getProperty "java.version")
+                            :total total-memory
+                            :free free-memory
+                            :max max-memory}
+                  :memoryInfo {:total total-memory
+                               :free free-memory
+                               :used (- total-memory free-memory)
+                               :max max-memory}
+                  :systemInfo {:osName (System/getProperty "os.name")
+                               :osArch (System/getProperty "os.arch")
+                               :userDir (System/getProperty "user.dir")}})))
+
 (defn- wrap-errors [handler]
   (fn [request]
     (try
@@ -278,6 +332,10 @@
         update-profile-password-handler (authorize (fn [request]
                                                      (principal-body-write user-repo :update-profile-password! request)) nil)
         avatar-handler (authorize (fn [_] (response/unavailable)) nil)
+        online-users-handler (authorize (fn [request] (online-users auth request)) "monitor:online:list")
+        force-online-logout-handler (authorize (fn [request] (force-online-logout auth request)) "monitor:online:forceLogout")
+        cache-info-handler (authorize (fn [_] (cache-info cache)) "monitor:cache:list")
+        server-info-handler (authorize (fn [_] (server-info)) "monitor:server:list")
         add-user-handler (authorize (fn [request] (body-write user-repo :add-user! request)) "system:user:add")
         update-user-handler (authorize (fn [request] (id-body-write user-repo :update-user! request)) "system:user:edit")
         delete-users-handler (authorize (fn [request] (ids-write user-repo :delete-users! request :id)) "system:user:remove")
@@ -422,6 +480,14 @@
                  ["/logs/operationLogs"
                   {:get (authorize operation-log-list-handler "monitor:operlog:list")
                    :delete delete-operation-log-handler}]
+                 ["/monitor/onlineUsers"
+                  {:get online-users-handler}]
+                 ["/monitor/onlineUser/:tokenId"
+                  {:delete force-online-logout-handler}]
+                 ["/monitor/cacheInfo"
+                  {:get cache-info-handler}]
+                 ["/monitor/serverInfo"
+                  {:get server-info-handler}]
                  ["/system/dict/types"
                   {:get (authorize dict-list "system:dict:list")}]
                  ["/system/dict/type/list"

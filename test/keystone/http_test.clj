@@ -54,7 +54,10 @@
                                                  (org.mindrot.jbcrypt.BCrypt/gensalt 4))
    :status 1
    :role-key "admin"
-   :permissions #{"system:dict:list"}})
+   :permissions #{"system:dict:list"
+                  "monitor:online:list"
+                  "monitor:online:forceLogout"
+                  "monitor:server:list"}})
 
 (defn make-full-auth-handler []
   (let [generator (java.security.KeyPairGenerator/getInstance "RSA")]
@@ -188,6 +191,20 @@
     (is (string? token))
     (is (= "admin" (get-in user-res [:json "data" "userInfo" "username"])))
     (is (= 0 (get-in refresh-res [:json "code"])))) )
+
+(deftest online-session-and-server-monitor-contract
+  (let [handler (make-full-auth-handler)
+        login-res (invoke handler :post "/login" nil
+                          {"username" "admin" "password" "secret"})
+        token (get-in login-res [:json "data" "token"])
+        online (invoke handler "/monitor/onlineUsers" token)
+        token-id (get-in online [:json "data" "rows" 0 "tokenId"])
+        server (invoke handler "/monitor/serverInfo" token)
+        force-logout (invoke handler :delete (str "/monitor/onlineUser/" token-id) token nil)]
+    (is (= 1 (get-in online [:json "data" "total"])))
+    (is (string? token-id))
+    (is (= 0 (get-in server [:json "code"])))
+    (is (= 0 (get-in force-logout [:json "code"])))) )
 
 (deftest management-read-routes-contract
   (let [handler (make-management-handler)

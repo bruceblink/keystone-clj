@@ -23,7 +23,8 @@
 ## P1: management
 - [x] Config and notice list/detail/create/update/delete APIs
 - [x] Profile read/update/password APIs
-- [ ] Avatar upload and online users
+- [ ] Avatar upload
+- [x] Online users, forced logout and server/cache monitor summaries
 - [x] Login and operation log query/delete APIs
 - [ ] Import/export and file API
 - [ ] Cache consistency and invalidation

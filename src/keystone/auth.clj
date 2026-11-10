@@ -99,11 +99,25 @@
                           (do (when session
                                 (swap! state update :sessions dissoc id))
                               nil)
-                          session)))]
+                          session)))
+        delete-session! (fn [id]
+                          (when-let [session (get-session id)]
+                            (swap! state
+                                   (fn [current]
+                                     (-> current
+                                         (update :sessions dissoc id)
+                                         (update :access dissoc (:access-jti session))
+                                         (update :accounts
+                                                 (fn [accounts]
+                                                   (if (= id (get accounts (:account-id session)))
+                                                     (dissoc accounts (:account-id session))
+                                                     accounts)))))))
+                          nil)]
     {:get-account (fn [account-id]
                    (when-let [id (get-in @state [:accounts account-id])]
                      (when (get-session id) id)))
      :get (fn [id] (get-session id))
+     :list (fn [] (->> (:sessions @state) vals (remove expired?) vec))
      :put! (fn [session]
              (swap! state
                     (fn [current]
@@ -114,19 +128,10 @@
              session)
      :delete-access! (fn [jti]
                        (swap! state update :access dissoc jti))
-     :delete! (fn [id]
-                (when-let [session (get-session id)]
-                  (swap! state
-                         (fn [current]
-                           (-> current
-                               (update :sessions dissoc id)
-                               (update :access dissoc (:access-jti session))
-                               (update :accounts
-                                       (fn [accounts]
-                                         (if (= id (get accounts (:account-id session)))
-                                           (dissoc accounts (:account-id session))
-                                           accounts)))))))
-                nil)
+     :delete-by-access! (fn [jti]
+                          (when-let [id (get-in @state [:access jti])]
+                            (delete-session! id)))
+     :delete! delete-session!
      :active-access? (fn [jti]
                        (boolean (when-let [id (get-in @state [:access jti])]
                                   (get-session id))))
@@ -139,11 +144,21 @@
         account-key (fn [id] (str "keystone:login:account:" id))
         access-key (fn [id] (str "keystone:login:access:" id))
         get-session (fn [id]
-                      (some-> (.get client (refresh-key id)) json-decode))]
+                      (some-> (.get client (refresh-key id)) json-decode))
+        delete-session! (fn [id]
+                          (when-let [session (get-session id)]
+                            (.del client (refresh-key id)
+                                  (account-key (:account-id session))
+                                  (access-key (:access-jti session))))
+                          nil)]
     {:get-account (fn [account-id]
                    (let [id (.get client (account-key account-id))]
                      (when (and id (get-session id)) id)))
      :get get-session
+     :list (fn [] (->> (.keys client "keystone:login:refresh:*")
+                       (map #(subs % (count "keystone:login:refresh:")))
+                       (keep get-session)
+                       vec))
      :put! (fn [session]
              (let [ttl (max 1 (int (Math/ceil (/ (- (long (:expires-at session))
                                                    (System/currentTimeMillis))
@@ -151,16 +166,14 @@
                    value (json-encode session)]
                (.setex client (refresh-key (:id session)) ttl value)
                (.setex client (account-key (:account-id session)) ttl (:id session))
-               (.setex client (access-key (:access-jti session)) ttl "1")
+               (.setex client (access-key (:access-jti session)) ttl (:id session))
                session))
      :delete-access! (fn [jti] (.del client (access-key jti)))
-     :delete! (fn [id]
-                (when-let [session (get-session id)]
-                  (.del client (refresh-key id)
-                        (account-key (:account-id session))
-                        (access-key (:access-jti session))))
-                nil)
-     :active-access? (fn [jti] (= "1" (.get client (access-key jti))))}))
+     :delete! delete-session!
+     :delete-by-access! (fn [jti]
+                          (when-let [id (.get client (access-key jti))]
+                            (delete-session! id)))
+     :active-access? (fn [jti] (some? (.get client (access-key jti))))}))
 
 (defn- sign-access-token [^PrivateKey private-key claims]
   (let [header (b64url (.getBytes (json-encode access-header) StandardCharsets/UTF_8))
@@ -223,6 +236,7 @@
                                  :user-id (or (:user-id user) (:userId user))
                                  :username (:username user)
                                  :access-jti access-jti
+                                 :issued-at (* 1000 issued-at)
                                  :refresh-hash (sha256 refresh-secret)
                                  :expires-at refresh-exp
                                  :user user}]
