@@ -7,7 +7,8 @@
 - [x] Fail-closed authentication boundary and isolated unit tests
 - [x] Flyway migration import helper, no automatic schema mutation
 - [x] Docker/Compose, CI, uberjar build configuration
-- [x] Verify dependencies, build, tests and Docker startup in a networked runtime
+- [x] Verify dependencies, build and tests in a networked runtime
+- [ ] Verify Docker startup in a networked runtime (container Maven proxy CA pending)
 - [x] Snapshot all upstream API routes, fixtures and migration checksums
 - [x] RSA public key/password decryption and bcrypt login service
 - [x] Captcha, login and refresh HTTP flow

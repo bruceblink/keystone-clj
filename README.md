@@ -40,6 +40,8 @@ curl http://localhost:18080/health
 
 Compose initializes clients but DOES NOT migrate the database automatically. First import the original Keystone Flyway SQL, inspect the target database's migration history, and explicitly enable APP_MIGRATE on disposable test data.
 
+The local Docker build requires the container's Maven/JVM trust store to include any corporate or environment HTTPS proxy CA.
+
 ## Implemented routes
 
 | Method | Path | Status |
