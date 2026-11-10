@@ -188,6 +188,15 @@
   (let [id (schema/positive-id (get-in request [:path-params :id]))]
     (write-call repo function-key [[id (body-params request)]])))
 
+(defn- principal-read [repo function-key request]
+  (if (and repo (fn? (get repo function-key)))
+    (response/ok ((get repo function-key) (get-in request [:principal :user-id])))
+    (response/unavailable)))
+
+(defn- principal-body-write [repo function-key request]
+  (write-call repo function-key [[(get-in request [:principal :user-id])
+                                  (body-params request)]]))
+
 (defn- wrap-errors [handler]
   (fn [request]
     (try
@@ -263,6 +272,12 @@
                             (partial management-list user-repo :list-posts))
         post-detail-handler (with-repository-function user-repo :get-post
                               (partial management-detail user-repo :get-post "岗位"))
+        profile-handler (authorize (fn [request] (principal-read user-repo :get-profile request)) nil)
+        update-profile-handler (authorize (fn [request]
+                                            (principal-body-write user-repo :update-profile! request)) nil)
+        update-profile-password-handler (authorize (fn [request]
+                                                     (principal-body-write user-repo :update-profile-password! request)) nil)
+        avatar-handler (authorize (fn [_] (response/unavailable)) nil)
         add-user-handler (authorize (fn [request] (body-write user-repo :add-user! request)) "system:user:add")
         update-user-handler (authorize (fn [request] (id-body-write user-repo :update-user! request)) "system:user:edit")
         delete-users-handler (authorize (fn [request] (ids-write user-repo :delete-users! request :id)) "system:user:remove")
@@ -370,6 +385,12 @@
                   {:post add-post-handler
                    :put update-post-handler
                    :delete delete-post-handler}]
+                 ["/system/user/profile"
+                  {:get profile-handler
+                   :put update-profile-handler
+                   :post avatar-handler}]
+                 ["/system/user/profile/password"
+                  {:put update-profile-password-handler}]
                  ["/system/configs"
                   {:get (authorize config-list-handler "system:config:list")
                    :delete refresh-config-handler}]

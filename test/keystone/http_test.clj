@@ -102,6 +102,10 @@
      :dept-dropdown (fn [] [{:id 1 :label "总部"}])
      :list-posts (fn [_] {:total 1 :rows [{:postId 1 :postCode "ceo"}]})
      :get-post (fn [id] (when (= 1 id) {:postId 1 :postCode "ceo"}))
+     :get-profile (fn [_] {:postName "董事长" :roleName "管理员"
+                           :user {:userId 42 :username "admin"}})
+     :update-profile! (fn [_] nil)
+     :update-profile-password! (fn [_] nil)
      :add-user! (fn [_] nil)
      :update-user! (fn [_] nil)
      :delete-users! (fn [_] nil)
@@ -203,7 +207,12 @@
         configs (invoke handler "/system/configs" "test-token")
         notices (invoke handler "/system/notices" "test-token")
         add-notice (invoke handler :post "/system/notices" "test-token"
-                           {"noticeTitle" "公告" "noticeType" 1 "status" 1})]
+                           {"noticeTitle" "公告" "noticeType" 1 "status" 1})
+        profile (invoke handler "/system/user/profile" "test-token")
+        update-profile (invoke handler :put "/system/user/profile" "test-token"
+                               {"nickName" "新名称"})
+        update-password (invoke handler :put "/system/user/profile/password" "test-token"
+                                 {"oldPassword" "old" "newPassword" "new"})]
     (is (= 1 (get-in users [:json "data" "total"])))
     (is (= "admin" (get-in user [:json "data" "username"])))
     (is (= "admin" (get-in role [:json "data" "roleKey"])))
@@ -219,4 +228,7 @@
     (is (= 0 (get-in delete-data [:json "code"])))
     (is (= 1 (get-in configs [:json "data" "total"])))
     (is (= "公告" (get-in notices [:json "data" "rows" 0 "noticeTitle"])))
-    (is (= 0 (get-in add-notice [:json "code"])))) )
+    (is (= 0 (get-in add-notice [:json "code"])))
+    (is (= "管理员" (get-in profile [:json "data" "roleName"])))
+    (is (= 0 (get-in update-profile [:json "code"])))
+    (is (= 0 (get-in update-password [:json "code"])))) )

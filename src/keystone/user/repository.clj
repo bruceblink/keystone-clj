@@ -443,6 +443,42 @@
   (some-> (find-by-id datasource user-id)
           public-user))
 
+(defn get-profile [datasource user-id]
+  (when-let [user (find-by-id datasource user-id)]
+    {:postName (:postName user)
+     :roleName (:roleName user)
+     :user (public-user user)}))
+
+(defn update-profile! [datasource user-id body]
+  (let [nickname (or (body-value body "nickName") (body-value body "nickname"))
+        fields (cond-> []
+                 (some? nickname) (conj ["nickname" nickname])
+                 (some? (body-value body "email")) (conj ["email" (body-value body "email")])
+                 (some? (body-value body "phoneNumber"))
+                 (conj ["phone_number" (body-value body "phoneNumber")])
+                 (some? (body-value body "sex")) (conj ["sex" (body-value body "sex")]))]
+    (when (empty? fields)
+      (throw (ex-info "No profile fields to update" {:type :validation})))
+    (execute! datasource
+              (str "UPDATE sys_user SET "
+                   (str/join ", " (map (fn [[column _]] (str column " = ?")) fields))
+                   ", update_time = NOW() WHERE user_id = ? AND deleted = 0")
+              (conj (mapv second fields) user-id)))
+  nil)
+
+(defn update-profile-password! [datasource user-id body]
+  (let [old-password (required-body body "oldPassword")
+        new-password (required-body body "newPassword")
+        user (find-by-id datasource user-id)]
+    (when-not (and user (BCrypt/checkpw old-password (:password user)))
+      (throw (ex-info "用户密码错误" {:type :invalid-credentials :code 10510})))
+    (when (= old-password new-password)
+      (throw (ex-info "用户新密码与旧密码相同" {:type :validation})))
+    (execute! datasource
+              "UPDATE sys_user SET password = ?, update_time = NOW() WHERE user_id = ? AND deleted = 0"
+              [(BCrypt/hashpw new-password (BCrypt/gensalt 10)) user-id]))
+  nil)
+
 (defn- role-row->dto [row selected-menu-ids]
   {:roleId (:role_id row)
    :roleName (:role_name row)
@@ -646,6 +682,9 @@
    :dept-dropdown (fn [] (dept-dropdown datasource))
    :list-posts #(list-posts datasource %)
    :get-post #(get-post datasource %)
+   :get-profile #(get-profile datasource %)
+   :update-profile! (fn [[id body]] (update-profile! datasource id body))
+   :update-profile-password! (fn [[id body]] (update-profile-password! datasource id body))
    :add-user! #(add-user! datasource %)
    :update-user! (fn [[id body]] (update-user! datasource id body))
    :reset-user-password! (fn [[id body]] (reset-user-password! datasource id body))

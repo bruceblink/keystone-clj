@@ -22,7 +22,8 @@
 
 ## P1: management
 - [x] Config and notice list/detail/create/update/delete APIs
-- [ ] Profile, logs and online users
+- [x] Profile read/update/password APIs
+- [ ] Avatar upload, logs and online users
 - [ ] Import/export and file API
 - [ ] Cache consistency and invalidation
 - [ ] Frontend E2E parity
